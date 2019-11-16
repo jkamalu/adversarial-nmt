@@ -4,7 +4,7 @@ keep_checkpoint: 10
 
 pre_word_vecs_enc: glove_dir
 
-word_vec_size: 300
+word_vec_size: 200
 layers: 3
 bridge: True
 
