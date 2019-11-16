@@ -1,0 +1,20 @@
+data: data
+save_model: models/model
+keep_checkpoint: 10
+
+pre_word_vecs_enc: glove_dir
+
+word_vec_size: 300
+layers: 3
+bridge: True
+
+optim: adam
+learning_rate: 0.001
+
+epochs: 3
+
+report_every: 100
+log_file: runs/first
+tensorboard: True
+tensorboard_log_dir: runs/first
+

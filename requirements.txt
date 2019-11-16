@@ -1,0 +1,5 @@
+torch
+torchvision
+OpenNMT-py
+tensorboard
+jupyter
