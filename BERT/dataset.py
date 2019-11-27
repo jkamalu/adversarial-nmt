@@ -2,7 +2,7 @@
 '''
 
 import torch
-from ..transformers.transformers import BertTokenizer
+from lib.huggingface.transformers import BertTokenizer
 import os
 import logging
 
@@ -19,8 +19,17 @@ class TextDataset(Dataset):
 
     @staticmethod
     def load_data(data_folder, is_train):
-        for filename in os.listdir(os.path.join("data", data_folder)):
+        root_directory_path = os.path.join(os.getcwd(), data_folder)
+        for filename in os.listdir(root_directory_path):
+            if(is_train):
+                if('.train' not in filename):
+                     continue
+
+            _torch_dataset = torch.load(os.path.join(root_directory_path,filename))
+            print(_torch_dataset[0].__dict__.keys())
+            exit()
             logging.info("Found file with name {filename}".format(filename=filename))
+
 
 
     def __len__(self):

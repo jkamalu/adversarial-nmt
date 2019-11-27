@@ -2,3 +2,10 @@ OpenNMT-py
 data
 europarl-v7
 glove_dir
+connect_to_gcp.sh
+*.ipynb
+.ipynb_checkpoints
+*.pyc
+transformers
+huggingface
+lib
