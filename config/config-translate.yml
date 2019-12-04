@@ -1,3 +1,7 @@
-# src: data/europarl-v7/europarl-v7.fr-en.en.val 
-src: src.txt
-model: runs/first/model_step_28644.pt
+src: data/europarl-v7/europarl-v7.fr-en.en.val 
+tgt: data/europarl-v7/europarl-v7.fr-en.fr.val
+# src: src.txt
+# tgt: tgt.txt
+model: runs/second/model_step_90000.pt
+report_bleu: True
+report_rouge: True
