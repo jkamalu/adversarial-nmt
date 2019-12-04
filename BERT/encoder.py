@@ -9,29 +9,23 @@ import argparse
 
 import torch
 
-from lib.huggingface.transformers import (RobertaConfig, RobertaForMaskedLM, RobertaTokenizer,
-                                          CamembertConfig, CamembertForMaskedLM, CamembertTokenizer)
+from lib.huggingface.transformers import (RobertaConfig, RobertaModel, RobertaTokenizer,
+                                          CamembertConfig, CamembertModel, CamembertTokenizer)
 
 MODEL_CLASSES = {
-    'english': (RobertaConfig, RobertaForMaskedLM),
-    'french': (CamembertConfig, CamembertForMaskedLM)
+    'english': (RobertaConfig, RobertaModel, "roberta-base"),
+    'french': (CamembertConfig, CamembertModel, "camembert-base")
 }
 
 class Encoder(torch.nn.Module):
 
-    def __init__(self, language, weights, device="cpu"):
+    def __init__(self, language, device="cpu"):
         super().__init__()
 
         self.language = language
-        self.weights = weights
+        _, model_class, weights = MODEL_CLASSES[language]
 
-        config_class, model_class = MODEL_CLASSES[args.language]
-
-        self.config = config_class.from_pretrained(args.weights)
-
-        self.model = model_class.from_pretrained(args.weights,
-                                                 from_tf=bool('.ckpt' in args.weights))
-
+        self.model = model_class.from_pretrained(weights)
         self.model.to(device)
 
     def forward(self, x):
@@ -45,8 +39,6 @@ if __name__ == '__main__':
 
     parser.add_argument("--language", type=str, required=True,
                         help="The model architecture to be fine-tuned.")
-    parser.add_argument("--weights", type=str, required=True,
-                        help="The model checkpoint for weights initialization.")
 
     args = parser.parse_args()
 
