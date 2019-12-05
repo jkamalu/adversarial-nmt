@@ -1,4 +1,4 @@
-batch_size: &batch_size 64
+batch_size: &batch_size 16
 
 data_loader:
     batch_size: *batch_size
@@ -7,7 +7,7 @@ data_loader:
 
 small_transformer:
     num_layers: 6
-    d_model: 512
+    d_model: 768
     heads: 8
     d_ff: 2048
     copy_attn: False
