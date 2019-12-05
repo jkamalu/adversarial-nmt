@@ -26,14 +26,12 @@ class Encoder(torch.nn.Module):
         _, model_class, weights = MODEL_CLASSES[language]
 
         self.model = model_class.from_pretrained(weights)
-        self.linear_classify = torch.nn.Linear(768, 1)
         self.model.to(device)
 
     def forward(self, x):
         encoder_out = self.model(x)
         assert(len(encoder_out) == 2), "Output of the encoder needs to have pooled layer in second dimension"
-        language_classification_out = self.linear_classify(encoder_out[1])
-        return (encoder_out, language_classification_out)
+        return encoder_out
 
 
 if __name__ == '__main__':
