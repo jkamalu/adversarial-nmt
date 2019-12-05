@@ -2,3 +2,5 @@ torch
 torchvision
 OpenNMT-py
 transformers
+scikit-learn
+pyaml

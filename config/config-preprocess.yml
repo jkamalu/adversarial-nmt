@@ -1,0 +1,10 @@
+train_src: data/europarl-v7/europarl-v7.fr-en.en.train
+train_tgt: data/europarl-v7/europarl-v7.fr-en.fr.train
+valid_src: data/europarl-v7/europarl-v7.fr-en.en.val
+valid_tgt: data/europarl-v7/europarl-v7.fr-en.fr.val
+save_data: data/data
+
+src_vocab_size: 30000
+tgt_vocab_size: 30000
+filter_valid: True
+lower: True
