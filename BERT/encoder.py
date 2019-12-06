@@ -6,9 +6,7 @@ and sequence-to-sequence pipelines
 '''
 
 import argparse
-
 import torch
-
 from lib.huggingface.transformers import (RobertaConfig, RobertaModel, RobertaTokenizer,
                                           CamembertConfig, CamembertModel, CamembertTokenizer)
 
@@ -32,7 +30,6 @@ class Encoder(torch.nn.Module):
         encoder_out = self.model(x)
         assert(len(encoder_out) == 2), "Output of the encoder needs to have pooled layer in second dimension"
         return encoder_out
-
 
 if __name__ == '__main__':
 
