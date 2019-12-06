@@ -43,56 +43,6 @@ class Collator(object):
 
         return ((input_idx_tensor, input_idx_tensor_no_eos, torch.tensor(input_lengths)), (output_idx_tensor, output_idx_tensor_no_eos, torch.tensor(output_lengths)))
 
-    '''
-    def __call__(self, data):
-
-        #NOTE: split() and tokenizer.encode() might produce different length of tokenization
-
-        (line_en, tokenized_en), (line_fr, tokenized_fr)
-
-        input_sentences, output_sentences = zip(*data)
-
-        input_sentences = [self.tokenizer_en.encode(sentence) for sentence in input_sentences]
-        output_sentences = [self.tokenizer_fr.encode(sentence) for sentence in output_sentences]
-
-        input_lengths = [len(sentence) for sentence in input_sentences]
-        output_lengths = [len(sentence) for sentence in output_sentences]
-
-        ignore_indices = []
-        for idx, (input_len, output_len) in enumerate(zip(input_lengths, output_lengths)):
-            if (input_len >= self.standard_length or output_len >= self.standard_length):
-                print("Ignoring indices")
-                ignore_indices.append(idx)
-
-        input_lengths = [length for idx, length in enumerate(input_lengths) if idx not in ignore_indices]
-        output_lengths = [length for idx, length in enumerate(output_lengths) if idx not in ignore_indices]
-
-        batch_size = len(input_sentences) - len(ignore_indices)
-
-        input_idx_tensor = torch.zeros((batch_size, self.standard_length), dtype=torch.long)
-        output_idx_tensor = torch.zeros((batch_size, self.standard_length), dtype=torch.long)
-
-        input_idx_tensor_no_eos = torch.zeros((batch_size, self.standard_length-1), dtype=torch.long)
-        output_idx_tensor_no_eos = torch.zeros((batch_size, self.standard_length-1), dtype=torch.long)
-
-        true_idx = 0
-        for idx, (sentence_len, input_sentence) in enumerate(zip(input_lengths, input_sentences)):
-            if (idx in ignore_indices):
-                continue
-            input_idx_tensor[true_idx, :] = torch.tensor(input_sentence + [1]*(self.standard_length-sentence_len))
-            input_idx_tensor_no_eos[true_idx, :] = torch.tensor(input_sentence[:-1] + [1]*(self.standard_length-sentence_len))
-            true_idx += 1
-
-        true_idx = 0
-        for idx, (sentence_len, output_sentence) in enumerate(zip(output_lengths, output_sentences)):
-            if (idx in ignore_indices):
-                continue
-            output_idx_tensor[true_idx, :] = torch.tensor(output_sentence + [1]*(self.standard_length-sentence_len))
-            output_idx_tensor_no_eos[true_idx, :] = torch.tensor(output_sentence[:-1] + [1]*(self.standard_length-sentence_len))
-            true_idx += 1
-
-        return ((input_idx_tensor, input_idx_tensor_no_eos, torch.tensor(input_lengths)), (output_idx_tensor, output_idx_tensor_no_eos, torch.tensor(output_lengths)))
-    '''
 
 class TextDataset(Dataset):
     def __init__(self, directory,
@@ -114,7 +64,7 @@ class TextDataset(Dataset):
 
     def load_data(self, directory, mode, minlen, maxlen):
 
-        limit_data = 20000
+        limit_data = 200000
 
         parallel_data = []
         removed_count_short = 0
@@ -159,7 +109,7 @@ class TextDataset(Dataset):
 
 
                 tokenized_en = self.tokenizer_en.encode(line_en)
-                tokenized_fr = self.tokenizer_en.encode(line_fr)
+                tokenized_fr = self.tokenizer_fr.encode(line_fr)
 
                 too_short = len(tokenized_en) < minlen or len(tokenized_fr) < minlen
                 too_long = len(tokenized_en) > maxlen or len(tokenized_fr) > maxlen

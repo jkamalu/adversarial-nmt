@@ -3,19 +3,20 @@ __author__ = 'Richard Diehl Martinez'
 ''' Util functions for extracting attention scores and other useful decorators'''
 
 import torch
+import math
 
 def write_to_tensorboard(base, metrics, training, step, writer):
     """
     Write data to tensorboard.
-    
+
     Example usage:
-        writer = torch.utils.tensorboard.SummaryWriter("runs/regularize_hidden")
+        writer = SummaryWriter("runs/regularize_hidden")
         write_to_tensorboard("CCE", {'fr-en': 0.5, 'fr-en': 0.4}, True, 42, writer)
     """
-    
+
     tag = "{}/{}".format(base, "train" if training else "val")
-    
-    writer.add_scalars(tag, matrics, step, writer)
+
+    writer.add_scalars(tag, metrics, step)
 
 def transpose_for_scores(x, num_attention_heads, attention_head_size):
     '''
@@ -40,7 +41,7 @@ def calculate_attention_scores(q_layer, k_layer, num_attention_heads,
     # Take the dot product between "query" and "key" to get the raw attention scores.
     attention_scores = torch.matmul(query_layer, key_layer.transpose(-1, -2))
     attention_scores = attention_scores / math.sqrt(attention_head_size)
-    
+
     # Apply the attention mask is (precomputed for all layers in BertModel forward() function)
     if mask is not None:
         mask = mask.to(dtype=torch.float)
