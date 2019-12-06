@@ -4,6 +4,19 @@ __author__ = 'Richard Diehl Martinez'
 
 import torch
 
+def write_to_tensorboard(base, metrics, training, step, writer):
+    """
+    Write data to tensorboard.
+    
+    Example usage:
+        writer = torch.utils.tensorboard.SummaryWriter("runs/regularize_hidden")
+        write_to_tensorboard("CCE", {'fr-en': 0.5, 'fr-en': 0.4}, True, 42, writer)
+    """
+    
+    tag = "{}/{}".format(base, "train" if training else "val")
+    
+    writer.add_scalars(tag, matrics, step, writer)
+
 def transpose_for_scores(x, num_attention_heads, attention_head_size):
     '''
     Helper function to transpose the shape of an attention tensor.
