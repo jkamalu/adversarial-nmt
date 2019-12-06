@@ -12,51 +12,170 @@ from tqdm import tqdm_notebook as tqdm
 
 from torch.utils.data import Dataset
 
-def collate(data):
-    ''' Helper function passed into Dataloader class to specify collation'''
-    return None
+class Collator(object):
+    ''' colltor object which can be called by the dataloader class for processing batches.'''
+    def __init__(self, maxlen=50,):
+        self.max_len = maxlen # standardized length
+
+    def __call__(self, data):
+        input_sentences, output_sentences = zip(*data)
+
+        input_lengths = [len(sentence) for sentence in input_sentences]
+        output_lengths = [len(sentence) for sentence in output_sentences]
+
+        batch_size = len(input_sentences)
+
+        input_idx_tensor = torch.zeros((batch_size, self.max_len), dtype=torch.long)
+        output_idx_tensor = torch.zeros((batch_size, self.max_len), dtype=torch.long)
+
+        input_idx_tensor_no_eos = torch.zeros((batch_size, self.max_len-1), dtype=torch.long)
+        output_idx_tensor_no_eos = torch.zeros((batch_size, self.max_len-1), dtype=torch.long)
+
+
+        for idx, (sentence_len, input_sentence) in enumerate(zip(input_lengths, input_sentences)):
+            input_idx_tensor[idx, :] = torch.tensor(input_sentence + [1]*(self.max_len-sentence_len))
+            input_idx_tensor_no_eos[idx, :] = torch.tensor(input_sentence[:-1] + [1]*(self.max_len-sentence_len))
+
+
+        for idx, (sentence_len, output_sentence) in enumerate(zip(output_lengths, output_sentences)):
+            output_idx_tensor[idx, :] = torch.tensor(output_sentence + [1]*(self.max_len-sentence_len))
+            output_idx_tensor_no_eos[idx, :] = torch.tensor(output_sentence[:-1] + [1]*(self.max_len-sentence_len))
+
+        return ((input_idx_tensor, input_idx_tensor_no_eos, torch.tensor(input_lengths)), (output_idx_tensor, output_idx_tensor_no_eos, torch.tensor(output_lengths)))
+
+    '''
+    def __call__(self, data):
+
+        #NOTE: split() and tokenizer.encode() might produce different length of tokenization
+
+        (line_en, tokenized_en), (line_fr, tokenized_fr)
+
+        input_sentences, output_sentences = zip(*data)
+
+        input_sentences = [self.tokenizer_en.encode(sentence) for sentence in input_sentences]
+        output_sentences = [self.tokenizer_fr.encode(sentence) for sentence in output_sentences]
+
+        input_lengths = [len(sentence) for sentence in input_sentences]
+        output_lengths = [len(sentence) for sentence in output_sentences]
+
+        ignore_indices = []
+        for idx, (input_len, output_len) in enumerate(zip(input_lengths, output_lengths)):
+            if (input_len >= self.standard_length or output_len >= self.standard_length):
+                print("Ignoring indices")
+                ignore_indices.append(idx)
+
+        input_lengths = [length for idx, length in enumerate(input_lengths) if idx not in ignore_indices]
+        output_lengths = [length for idx, length in enumerate(output_lengths) if idx not in ignore_indices]
+
+        batch_size = len(input_sentences) - len(ignore_indices)
+
+        input_idx_tensor = torch.zeros((batch_size, self.standard_length), dtype=torch.long)
+        output_idx_tensor = torch.zeros((batch_size, self.standard_length), dtype=torch.long)
+
+        input_idx_tensor_no_eos = torch.zeros((batch_size, self.standard_length-1), dtype=torch.long)
+        output_idx_tensor_no_eos = torch.zeros((batch_size, self.standard_length-1), dtype=torch.long)
+
+        true_idx = 0
+        for idx, (sentence_len, input_sentence) in enumerate(zip(input_lengths, input_sentences)):
+            if (idx in ignore_indices):
+                continue
+            input_idx_tensor[true_idx, :] = torch.tensor(input_sentence + [1]*(self.standard_length-sentence_len))
+            input_idx_tensor_no_eos[true_idx, :] = torch.tensor(input_sentence[:-1] + [1]*(self.standard_length-sentence_len))
+            true_idx += 1
+
+        true_idx = 0
+        for idx, (sentence_len, output_sentence) in enumerate(zip(output_lengths, output_sentences)):
+            if (idx in ignore_indices):
+                continue
+            output_idx_tensor[true_idx, :] = torch.tensor(output_sentence + [1]*(self.standard_length-sentence_len))
+            output_idx_tensor_no_eos[true_idx, :] = torch.tensor(output_sentence[:-1] + [1]*(self.standard_length-sentence_len))
+            true_idx += 1
+
+        return ((input_idx_tensor, input_idx_tensor_no_eos, torch.tensor(input_lengths)), (output_idx_tensor, output_idx_tensor_no_eos, torch.tensor(output_lengths)))
+    '''
 
 class TextDataset(Dataset):
-    def __init__(self, directory, training=True, minlen=2):
+    def __init__(self, directory,
+                       tokenizer_en,
+                       tokenizer_fr,
+                       training=True,
+                       minlen=2,
+                       maxlen=50):
         '''
         Requires passing in a folder to where the dataset is stored
         '''
 
         # data is stored as a list of tuples of strings (l1-l2)
-        mode = "train" if training else "val"
-        self.parallel_data = self.load_data(directory, mode, minlen)
+        self.tokenizer_en = tokenizer_en
+        self.tokenizer_fr = tokenizer_fr
 
-    @staticmethod
-    def load_data(directory, mode, minlen):
+        mode = "train" if training else "val"
+        self.parallel_data = self.load_data(directory, mode, minlen, maxlen)
+
+    def load_data(self, directory, mode, minlen, maxlen):
+
+        limit_data = 20000
 
         parallel_data = []
-        removed_count = 0
+        removed_count_short = 0
+        removed_count_long = 0
+        read_counter = 0
 
         if mode not in  ["train", "val"]:
              raise ValueError("mode needs to be either \'train\' or \'val\'.")
-           
+
         directory = os.path.join(os.getcwd(), directory)
         files = filter(lambda fd: fd.endswith(mode), os.listdir(directory))
         files = {f.split('.')[-2]:os.path.join(directory, f) for f in files}
-        
+
         with open(files["en"], "rt") as en, open(files["fr"], "rt") as fr:
             while True:
+                if (read_counter > limit_data):
+                    break
+
+                if (read_counter % 10000 == 0):
+                    print(read_counter)
+                read_counter += 1
                 line_en = en.readline()
                 line_fr = fr.readline()
-                
+
                 if line_en == "" or line_fr == "":
                     break
-                
+
                 line_en = line_en.strip().lower()
                 line_fr = line_fr.strip().lower()
-                
-                if len(line_en.split(" ")) < minlen or len(line_fr.split(" ")) < minlen:
-                    removed_count += 1
-                    continue
-                
-                parallel_data.append((line_en, line_fr))
 
-        print(f"{removed_count} examples with length < {minlen} removed.")
+                # splitting and doing this check first speeds up computation
+                too_short = len(line_en.split()) < minlen or len(line_fr.split()) < minlen
+                too_long = len(line_en.split()) > maxlen or len(line_fr.split()) > maxlen
+
+                if too_long:
+                    removed_count_long += 1
+                    continue
+
+                if too_short:
+                    removed_count_short += 1
+                    continue
+
+
+                tokenized_en = self.tokenizer_en.encode(line_en)
+                tokenized_fr = self.tokenizer_en.encode(line_fr)
+
+                too_short = len(tokenized_en) < minlen or len(tokenized_fr) < minlen
+                too_long = len(tokenized_en) > maxlen or len(tokenized_fr) > maxlen
+
+                if too_long:
+                    removed_count_long += 1
+                    continue
+
+                if too_short:
+                    removed_count_short += 1
+                    continue
+
+                parallel_data.append((tokenized_en, tokenized_fr))
+
+        print("{} examples with length < {} removed.".format(removed_count_short, minlen))
+        print("{} examples with length > {} removed.".format(removed_count_long, maxlen))
 
         return parallel_data
 
