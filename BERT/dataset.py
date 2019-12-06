@@ -17,70 +17,52 @@ def collate(data):
     return None
 
 class TextDataset(Dataset):
-    def __init__(self, data_folder, is_train=True):
+    def __init__(self, directory, training=True, minlen=2):
         '''
         Requires passing in a folder to where the dataset is stored
         '''
 
         # data is stored as a list of tuples of strings (l1-l2)
-        self.parallel_data = self.load_data(data_folder, data_type="train" if is_train else "val")
-        self.onmt_vocab = self.load_onmt_vocab(data_folder)
+        mode = "train" if training else "val"
+        self.parallel_data = self.load_data(directory, mode, minlen)
 
     @staticmethod
-    def load_data(data_folder, data_type="train"):
+    def load_data(directory, mode, minlen):
+
         parallel_data = []
-        root_directory_path = os.path.join(os.getcwd(), data_folder)
+        removed_count = 0
 
-        removed_counter = 0
-
-        if (data_type != "train" and data_type != "val"):
-             raise ValueError("data_type needs to be either set to train or val")
-
-        for filename in os.listdir(root_directory_path):
-
-            if (data_type == "train"):
-                if('.train' not in filename):
-                     continue
-            else:
-                if('.val' not in filename):
-                     continue
-
-            print("Loading data from file: {filename}".format(filename=filename))
-
-            _torch_dataset = torch.load(os.path.join(root_directory_path,filename))
-
-            for idx, _example in enumerate(_torch_dataset):
-
-                _src = _example.src
-                _tgt = _example.tgt
-                _idx = _example.indices
-
-                if (len(_src[0]) < 2 or len(_tgt[0]) < 2):
-                    removed_counter += 1
+        if mode not in  ["train", "val"]:
+             raise ValueError("mode needs to be either \'train\' or \'val\'.")
+           
+        directory = os.path.join(os.getcwd(), directory)
+        files = filter(lambda fd: fd.endswith(mode), os.listdir(directory))
+        files = {f.split('.')[-2]:os.path.join(directory, f) for f in files}
+        
+        with open(files["en"], "rt") as en, open(files["fr"], "rt") as fr:
+            while True:
+                line_en = en.readline()
+                line_fr = fr.readline()
+                
+                if line_en == "" or line_fr == "":
+                    break
+                
+                line_en = line_en.strip().lower()
+                line_fr = line_fr.strip().lower()
+                
+                if len(line_en.split(" ")) < minlen or len(line_fr.split(" ")) < minlen:
+                    removed_count += 1
                     continue
+                
+                parallel_data.append((line_en, line_fr))
 
-                parallel_data.append((_src[0], _idx, _tgt[0]))
+        print(f"{removed_count} examples with length < {minlen} removed.")
 
-        print("removed {} examples - not long enough".format(removed_counter))
         return parallel_data
-
-
-    @staticmethod
-    def load_onmt_vocab(data_folder):
-        root_directory_path = os.path.join(os.getcwd(), data_folder)
-        for filename in os.listdir(root_directory_path):
-            if ('.vocab' not in filename):
-                 continue
-            _vocab = torch.load(os.path.join(root_directory_path,filename))
-            src_vocab = _vocab['src'].fields[0][1].vocab.itos
-            tgt_vocab = _vocab['tgt'].fields[0][1].vocab.itos
-            return (src_vocab, tgt_vocab)
-        raise Exception("Was unable to find a vocab file in the data directory.")
-
 
     def __len__(self):
         return len(self.parallel_data)
 
     def __getitem__(self, idx):
         '''Returning token indices '''
-        return (self.parallel_data[idx][0], self.parallel_data[idx][2])
+        return self.parallel_data[idx]
