@@ -64,8 +64,6 @@ class TextDataset(Dataset):
 
     def load_data(self, directory, mode, minlen, maxlen):
 
-        limit_data = 200000
-
         parallel_data = []
         removed_count_short = 0
         removed_count_long = 0
@@ -126,6 +124,11 @@ class TextDataset(Dataset):
 
         print("{} examples with length < {} removed.".format(removed_count_short, minlen))
         print("{} examples with length > {} removed.".format(removed_count_long, maxlen))
+
+        print("Saving out ")
+        import pickle
+        filehandler = open("train_dataset.pkl", 'wb')
+        pickle.dump(self, filehandler)
 
         return parallel_data
 

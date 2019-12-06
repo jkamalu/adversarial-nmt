@@ -1,4 +1,5 @@
 batch_size: &batch_size 16
+maxlen: &maxlen 60
 
 data_loader:
     batch_size: *batch_size
@@ -15,4 +16,4 @@ small_transformer:
     dropout: 0.1
     attention_dropout: 0.1
     max_relative_positions: 0
-    aan_useffn: False 
+    aan_useffn: False
