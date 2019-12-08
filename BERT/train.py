@@ -3,7 +3,7 @@ __author__ = 'Richard Diehl Martinez'
 '''
 
 import click
-from dataset import TextDataset
+from .dataset import TextDataset
 import logging
 
 @click.command()

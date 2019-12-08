@@ -76,8 +76,15 @@ def extract_attention_scores(hooks):
 
     return curr_attention_dict
 
-# some useful decorators
+def load_config(file_name="config/config.yml"):
+    ''' Loads in a config file'''
+    import os
+    import pyaml
+    with open(file_name, "r") as fd:
+        return pyaml.yaml.load(fd, Loader=pyaml.yaml.Loader)
+
 def time_this(original_function):
+    ''' Decorator for timing a partiular function'''
     def new_function(*args,**kwargs):
         print("starting timer")
         import datetime

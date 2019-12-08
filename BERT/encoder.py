@@ -7,7 +7,7 @@ and sequence-to-sequence pipelines
 
 import argparse
 import torch
-from lib.huggingface.transformers import (RobertaConfig, RobertaModel, RobertaTokenizer,
+from .lib.huggingface.transformers import (RobertaConfig, RobertaModel, RobertaTokenizer,
                                           CamembertConfig, CamembertModel, CamembertTokenizer)
 
 MODEL_CLASSES = {
