@@ -1,9 +1,9 @@
 __author__ = 'Richard Diehl Martinez'
-''' Main training loop
-'''
+
+''' Main training loop'''
 
 import click
-from .dataset import TextDataset
+from modules.data.dataset import TextDataset
 import logging
 
 @click.command()

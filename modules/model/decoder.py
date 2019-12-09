@@ -1,4 +1,6 @@
-''' Wrapper clas sover the onmt TransformerDecoder'''
+__author__ = 'John Kamalu'
+
+''' Wrapper class oover the onmt TransformerDecoder'''
 
 from onmt.decoders import TransformerDecoder
 import torch

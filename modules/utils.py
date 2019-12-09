@@ -1,9 +1,13 @@
-__author__ = 'Richard Diehl Martinez'
+__author__ = 'Richard Diehl Martinez, John Kamalu'
 
-''' Util functions for extracting attention scores and other useful decorators'''
+''' Util functions for modularizing training, extracting attention scores, etc.'''
 
+import os
 import torch
 import math
+
+def data_path(directory=""):
+    return os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", directory)
 
 def write_to_tensorboard(base, metrics, training, step, writer):
     """
