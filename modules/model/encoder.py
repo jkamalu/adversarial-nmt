@@ -52,14 +52,3 @@ class Encoder(torch.nn.Module):
         assert(len(encoder_out) == 2), "Output of the encoder needs to have pooled layer in second dimension"
         
         return encoder_out
-
-if __name__ == '__main__':
-
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument("--language", type=str, required=True,
-                        help="The model architecture to be fine-tuned.")
-
-    args = parser.parse_args()
-
-    encoder = Encoder(args.language, args.weights)
