@@ -1,16 +1,20 @@
 batch_size: &batch_size 16
 minlen: &minlen 2
 maxlen: &maxlen 60
-n_train: 100
-n_valid: 10
+n_train: -1
+n_valid: -1
 
 use_bert: True
 d_model: &d_model 768
+regularization: None
 
 data_loader:
     batch_size: *batch_size
     shuffle: True
     num_workers: 4
+    
+adam:
+    lr: 0.001
 
 vanilla_encoder:
     num_layers: 6
