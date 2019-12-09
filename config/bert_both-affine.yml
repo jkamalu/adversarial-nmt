@@ -1,0 +1,43 @@
+batch_size: &batch_size 16
+minlen: &minlen 2
+maxlen: &maxlen 50
+n_train: -1
+n_valid: -1
+
+# experiment variables
+use_bert:
+regularization: 
+
+d_model: &d_model 768
+
+data_loader:
+    batch_size: *batch_size
+    shuffle: True
+    num_workers: 4
+    
+checkpoint_frequency: 50000
+max_step_num: 300000
+
+adam:
+    lr: 0.001
+
+vanilla_encoder:
+    num_layers: 6
+    d_model: *d_model
+    heads: 8
+    d_ff: 2048
+    dropout: 0.1
+    attention_dropout: 0.1
+    max_relative_positions: 0
+
+vanilla_decoder:
+    num_layers: 6
+    d_model: *d_model
+    heads: 8
+    d_ff: 2048
+    copy_attn: False
+    self_attn_type: scaled-dot
+    dropout: 0.1
+    attention_dropout: 0.1
+    max_relative_positions: 0
+    aan_useffn: False
