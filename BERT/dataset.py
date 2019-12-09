@@ -8,6 +8,7 @@ change this back to a torch TextDataset class.
 import torch
 import os
 import logging
+import pickle
 from tqdm import tqdm_notebook as tqdm
 
 from torch.utils.data import Dataset
@@ -73,12 +74,19 @@ class TextDataset(Dataset):
              raise ValueError("mode needs to be either \'train\' or \'val\'.")
 
         directory = os.path.join(os.getcwd(), directory)
+        pkl_file = list(filter(lambda fd: fd.endswith(mode + ".pkl"), os.listdir(directory)))
+        if pkl_file:
+            # Loading in from stored out pkl files
+            load_in_file = os.path.join(directory, pkl_file[0])
+            print("**Loading in pre-saved file: {}".format(load_in_file))
+            return pickle.load(open(load_in_file, "rb"))
+
         files = filter(lambda fd: fd.endswith(mode), os.listdir(directory))
         files = {f.split('.')[-2]:os.path.join(directory, f) for f in files}
 
         with open(files["en"], "rt") as en, open(files["fr"], "rt") as fr:
             while True:
-                if (read_counter > limit_data):
+                if (read_counter > 2000):
                     break
 
                 if (read_counter % 10000 == 0):
@@ -125,10 +133,9 @@ class TextDataset(Dataset):
         print("{} examples with length < {} removed.".format(removed_count_short, minlen))
         print("{} examples with length > {} removed.".format(removed_count_long, maxlen))
 
-        print("Saving out ")
-        import pickle
-        filehandler = open("train_dataset.pkl", 'wb')
-        pickle.dump(self, filehandler)
+        print("**Saving out file")
+        saved_out_file = open(os.path.join(directory, "data.{}.pkl".format(mode)), 'wb')
+        pickle.dump(parallel_data, saved_out_file)
 
         return parallel_data
 
