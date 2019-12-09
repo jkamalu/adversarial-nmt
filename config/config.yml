@@ -15,6 +15,9 @@ data_loader:
     shuffle: True
     num_workers: 4
     
+checkpoint_frequency: 50000
+max_step_num: 300000
+
 adam:
     lr: 0.001
 
