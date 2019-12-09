@@ -1,4 +1,4 @@
-batch_size: &batch_size 16
+batch_size: &batch_size 2
 minlen: &minlen 2
 maxlen: &maxlen 50
 n_train: -1
@@ -18,7 +18,9 @@ data_loader:
     shuffle: True
     num_workers: 4
 
-checkpoint_frequency: 50000
+logging_frequency: 100
+val_frequency: 1000
+checkpoint_frequency: 5
 max_step_num: 300000
 
 adam:
@@ -33,6 +35,11 @@ vanilla_encoder:
     attention_dropout: 0.1
     max_relative_positions: 0
 
+discriminator:
+    << : *regularization
+    maxlen: *maxlen
+    d_model: *d_model
+    
 vanilla_decoder:
     num_layers: 6
     d_model: *d_model

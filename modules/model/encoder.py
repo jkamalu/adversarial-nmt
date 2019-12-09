@@ -202,6 +202,6 @@ class Encoder(torch.nn.Module):
             x = x.transpose(0, 1).unsqueeze(-1)
             # OpenNMT-py TransformerEncoder returns emb_x, out_x, len_x
             encoder_out = self.model(x, lengths=lengths)
-#             encoder_out = encoder_out.transpose(0, 1)
+            encoder_out = encoder_out.transpose(0, 1)
 
         return encoder_out
