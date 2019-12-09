@@ -5,17 +5,27 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class Discriminator(nn.Module):
-    def __init__(self, hidden_dim, output_dim=1, initial_affine_size=-1):
+    def __init__(self, regularization, output_dim=1, **kwargs):
         super().__init__()
+
+        if regularization == "none":
+            raise ValueError("Discriminator cannot be initialized for '\\none'\ regularization.") 
+        elif regularization == "attention":
+            hidden_dim = kwargs["maxlen"] ** 2
+        elif regularization == "hidden":
+            hidden_dim = kwargs["d_model"]
+        else:
+            raise ValueError("Discriminator must be initialized with '\attention'\ or '\hidden'\ regularization.")
+        
         self.hidden_dim = hidden_dim
         self.output_dim = output_dim
+        self.initial_affine_size = kwargs["n_affine"]
 
-        self.initial_affine_size = initial_affine_size
-        if (initial_affine_size > 0):
-            self.affine_combo = nn.Linear(initial_affine_size, 1)
+        if (self.initial_affine_size > 0):
+            self.affine_combo = nn.Linear(self.initial_affine_size, 1)
 
         self.ff_1 = nn.Linear(self.hidden_dim, self.hidden_dim //2)
-        self.ff_2 = nn.Linear(self.hidden_dim //2, output_dim)
+        self.ff_2 = nn.Linear(self.hidden_dim //2, self.output_dim)
 
     def forward(self, x):
         if self.initial_affine_size > 0:

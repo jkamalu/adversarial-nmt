@@ -7,6 +7,5 @@ connect_to_gcp.sh
 *.ipynb
 .ipynb_checkpoints
 *.pyc
-transformers
-huggingface
-lib
+__pycache__
+modules/lib

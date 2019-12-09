@@ -85,7 +85,10 @@ def load_config(file_name="config/config.yml"):
     import os
     import pyaml
     with open(file_name, "r") as fd:
-        return pyaml.yaml.load(fd, Loader=pyaml.yaml.Loader)
+        config = pyaml.yaml.load(fd, Loader=pyaml.yaml.Loader)
+    if config["regularization"]["type"] is None:
+        config["regularization"]["type"] = []
+    return config
 
 def time_this(original_function):
     ''' Decorator for timing a partiular function'''

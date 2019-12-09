@@ -6,8 +6,10 @@ n_valid: -1
 
 # experiment variables
 use_bert: False
-regularization: 
-    type: none
+regularization: &regularization
+    type:
+        -
+    n_affine: -1
 
 d_model: &d_model 768
 
@@ -15,10 +17,10 @@ data_loader:
     batch_size: *batch_size
     shuffle: True
     num_workers: 4
-    
+
 checkpoint_frequency: 50000
 max_step_num: 300000
-    
+
 adam:
     lr: 0.001
 
