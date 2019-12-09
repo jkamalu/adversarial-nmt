@@ -130,7 +130,7 @@ class TextDataset(Dataset):
 
                 parallel_data.append((tokenized_en, tokenized_fr))
                 
-                if len(parallel_data) >= size:
+                if len(parallel_data) >= size and size > 0:
                     break
 
         print("{} examples with length < {} removed.".format(removed_count_short, minlen))
