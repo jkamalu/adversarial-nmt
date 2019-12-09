@@ -6,7 +6,8 @@ n_valid: -1
 
 # experiment variables
 use_bert: True
-regularization: None
+regularization: 
+    type: none
 
 d_model: &d_model 768
 
