@@ -86,11 +86,9 @@ class TextDataset(Dataset):
 
         with open(files["en"], "rt") as en, open(files["fr"], "rt") as fr:
             while True:
-                if (read_counter > 2000):
-                    break
 
                 if (read_counter % 10000 == 0):
-                    print(read_counter)
+                    print("Reading in example: {}".format(read_counter))
                 read_counter += 1
                 line_en = en.readline()
                 line_fr = fr.readline()
