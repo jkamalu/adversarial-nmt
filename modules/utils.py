@@ -86,7 +86,7 @@ def load_config(file_name="config/config.yml"):
     import pyaml
     with open(file_name, "r") as fd:
         config = pyaml.yaml.load(fd, Loader=pyaml.yaml.Loader)
-    if config["regularization"]["type"] is None:
+    if config["regularization"]["type"] is None or config["regularization"]["type"] == [None]:
         config["regularization"]["type"] = []
     return config
 

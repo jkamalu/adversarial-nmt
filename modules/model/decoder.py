@@ -22,7 +22,7 @@ class Decoder(TransformerDecoder):
 
         return dec_outs
     
-    def init_state(src):
+    def init_state(self, src):
         # OpenNMT-py TransformerDecoder *FOOLISHLY* assume (L, B, D)
         src = src.transpose(0,1).unsqueeze(-1)
         # OpenNMT-py TransformerDecoder.init_state does not use args[1:3]

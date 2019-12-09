@@ -15,7 +15,7 @@ class Discriminator(nn.Module):
         elif regularization == "hidden":
             hidden_dim = kwargs["d_model"]
         else:
-            raise ValueError("Discriminator must be initialized with '\attention'\ or '\hidden'\ regularization.")
+            raise ValueError("Discriminator must be initialized with '\\attention'\ or '\hidden'\ regularization.")
         
         self.hidden_dim = hidden_dim
         self.output_dim = output_dim

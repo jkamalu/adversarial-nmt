@@ -185,7 +185,6 @@ class Encoder(torch.nn.Module):
 
         return module
 
-
     def forward(self, x, lengths=None):
 
         assert (self.is_initialized), "Encoder.init_bert or Encoder.init_vanilla must be called before the module can be used."
@@ -202,7 +201,7 @@ class Encoder(torch.nn.Module):
             # OpenNMT-py TransformerEncoder *FOOLISHLY* assume (L, B, D)
             x = x.transpose(0, 1).unsqueeze(-1)
             # OpenNMT-py TransformerEncoder returns emb_x, out_x, len_x
-            _, encoder_out, _  = self.model(x, lengths=lengths)
-            encoder_out = encoder_out.transpose(0, 1)
+            encoder_out = self.model(x, lengths=lengths)
+#             encoder_out = encoder_out.transpose(0, 1)
 
         return encoder_out
