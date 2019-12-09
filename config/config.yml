@@ -1,12 +1,14 @@
 batch_size: &batch_size 16
 minlen: &minlen 2
-maxlen: &maxlen 60
+maxlen: &maxlen 50
 n_train: -1
 n_valid: -1
 
-use_bert: True
+# experiment variables
+use_bert:
+regularization: 
+
 d_model: &d_model 768
-regularization: None
 
 data_loader:
     batch_size: *batch_size
