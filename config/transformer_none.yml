@@ -1,15 +1,15 @@
-batch_size: &batch_size 2
+batch_size: &batch_size 8
 minlen: &minlen 2
 maxlen: &maxlen 50
 n_train: -1
-n_valid: -1
+n_valid: 100
 
 # experiment variables
 use_bert: False
 regularization: &regularization
     type:
         -
-    n_affine: -1
+    n_affine: 0
 
 d_model: &d_model 768
 
@@ -20,7 +20,7 @@ data_loader:
 
 logging_frequency: 100
 val_frequency: 1000
-checkpoint_frequency: 5
+checkpoint_frequency: 50000
 max_step_num: 300000
 
 adam:
