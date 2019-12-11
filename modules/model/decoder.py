@@ -18,7 +18,7 @@ class Decoder(TransformerDecoder):
         dec_outs, attns = super().forward(tgt, memory_bank, memory_lengths=memory_lengths, step=step, **kwargs)
         # Project to the vocabulary dimension and enforce (B, L, D)
         weight = self.embeddings.make_embedding.emb_luts[0].weight
-        dec_outs = torch.einsum('lbd,vd->blv', dec_outs, weight).transpose(0,1)
+        dec_outs = torch.einsum('lbd,vd->blv', dec_outs, weight)
 
         return dec_outs
     

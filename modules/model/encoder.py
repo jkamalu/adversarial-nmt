@@ -186,6 +186,7 @@ class Encoder(torch.nn.Module):
         return module
 
     def forward(self, x, lengths=None):
+        '''We return the sequence about of either 1) a BERT model or 2) a vanilla encoder transformer '''
 
         assert (self.is_initialized), "Encoder.init_bert or Encoder.init_vanilla must be called before the module can be used."
 
@@ -196,12 +197,12 @@ class Encoder(torch.nn.Module):
             # huggingface models assume (B, L)
             encoder_out = self.model(x)
             # huggingface models return [sequence_output, pooled_output, ...]
-            return encoder_out[1]
+            return encoder_out[0] 
         else:
             # OpenNMT-py TransformerEncoder *FOOLISHLY* assume (L, B, D)
             x = x.transpose(0, 1).unsqueeze(-1)
             # OpenNMT-py TransformerEncoder returns emb_x, out_x, len_x
             encoder_out = self.model(x, lengths=lengths)
-            encoder_out = encoder_out.transpose(0, 1)
+            encoder_out = encoder_out
 
         return encoder_out
