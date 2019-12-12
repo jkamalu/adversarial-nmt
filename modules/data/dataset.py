@@ -32,7 +32,6 @@ class Collator(object):
         input_idx_tensor_no_eos = torch.zeros((batch_size, self.max_len-1), dtype=torch.long)
         output_idx_tensor_no_eos = torch.zeros((batch_size, self.max_len-1), dtype=torch.long)
 
-
         for idx, (sentence_len, input_sentence) in enumerate(zip(input_lengths, input_sentences)):
             input_idx_tensor[idx, :] = torch.tensor(input_sentence + [1]*(self.max_len-sentence_len))
             input_idx_tensor_no_eos[idx, :] = torch.tensor(input_sentence[:-1] + [1]*(self.max_len-sentence_len))

@@ -9,6 +9,8 @@ class Decoder(TransformerDecoder):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.v = self.embeddings.make_embedding.emb_luts[0].num_embeddings
+        self.projection = torch.nn.Linear(kwargs["d_model"], self.v)
 
     def forward(self, tgt, memory_bank, memory_lengths, step=None, **kwargs):
         # OpenNMT-py TransformerDecoder *FOOLISHLY* assume (L, B, D)
@@ -17,9 +19,8 @@ class Decoder(TransformerDecoder):
         # OpenNMT-py TransformerEncoder returns out_x, attn_x
         dec_outs, attns = super().forward(tgt, memory_bank, memory_lengths=memory_lengths, step=step, **kwargs)
         # Project to the vocabulary dimension and enforce (B, L, D)
-        weight = self.embeddings.make_embedding.emb_luts[0].weight
-        dec_outs = torch.einsum('lbd,vd->blv', dec_outs, weight)
-
+        dec_outs = dec_outs.transpose(0, 1)
+        dec_outs = self.projection(dec_outs)
         return dec_outs
     
     def init_state(self, src):
