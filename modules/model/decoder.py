@@ -5,19 +5,21 @@ __author__ = 'John Kamalu'
 from onmt.decoders import TransformerDecoder
 import torch
 import torch.nn as nn
-import torch.functional as F
+import torch.nn.functional as F
 
 
 class GRUDec(nn.Module):
     def __init__(self, *args, **kwargs):
         super().__init__()
 
-        assert("embeddings" in kwargs), "Must specify embeddings when initializing a GRU Decoder."
         self.vocab_size = kwargs['embeddings'].make_embedding.emb_luts[0].num_embeddings
         self.hidden_size = kwargs["d_model"]
+        self.max_seq_len = kwargs['maxlen']
 
-        # TODO: make this matrix shared with the BERT encoding
-        self.embedding = nn.Embedding(self.vocab_size, self.hidden_size)
+        self.embeddings = kwargs['embeddings'].make_embedding.emb_luts[0]
+        self.bridge = nn.Linear(self.max_seq_len , 1)
+        #TODO: eventually we also want to incorporate an attention mechanism
+
         self.gru = nn.GRU(self.hidden_size, self.hidden_size)
         self.projection = nn.Linear(self.hidden_size, self.vocab_size)
         self.softmax = nn.LogSoftmax(dim=1)
@@ -28,22 +30,13 @@ class GRUDec(nn.Module):
         Hidden is the hidden state representation of the BERT encoder.
         '''
 
-        print("Input shape")
-        print(input.shape)
-        print("hidden shape")
-        print(hidden.shape)
-        output = self.embedding(input).view(1, 1, -1)
+        emb_output = self.embeddings(input)
+        context_vec = self.bridge(hidden.transpose(1,2))
         output = F.relu(output)
-        gru_output, gru_hidden = self.gru(output, hidden)
-        print("inside of forward GRU")
-        print("GRU output shape")
-        print(gru_output.shape)
-        print("GRU hidden shape")
-        print(gru_hidden.shape)
+        gru_output, gru_hidden = self.gru(output.transpose(0,1), context_vec.permute(2,0,1))
         output = self.softmax(self.projection(gru_output[0]))
-        print("output shape")
-        print(output.shape)
-        return output#, gru_hidden
+
+        return output
 
     def init_state(self, *args):
         ''' Implemented for consistency with TransformerDec'''
@@ -84,6 +77,8 @@ class Decoder(nn.Module):
 
     @classmethod
     def init_from_config(cls, type="GRU", *args, **kwargs):
+        assert("embeddings" in kwargs), "Must specify embeddings when initializing a GRU Decoder."
+
         module = cls(type)
         if(type == "GRU"):
             module.model = GRUDec(*args, **kwargs)
