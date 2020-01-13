@@ -18,7 +18,7 @@ data_loader:
     shuffle: True
     num_workers: 4
 
-logging_frequency: 100
+logging_frequency: 10
 val_frequency: 1000
 checkpoint_frequency: 50000
 max_step_num: 300000
@@ -42,6 +42,8 @@ discriminator:
     d_model: *d_model
 
 decoder:
-    type: GRU 
+    type: GRU
+    maxlen: *maxlen
     d_model: *d_model
     dropout: 0.1
+    teacher_forcing_prob: 0.5
