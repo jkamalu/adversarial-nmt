@@ -19,27 +19,45 @@ class GRUDec(nn.Module):
 
         self.embeddings = kwargs['embeddings'].make_embedding.emb_luts[0]
         self.bridge = nn.Linear(self.max_seq_len , 1)
-        #TODO: eventually we also want to incorporate an attention mechanism
+        self.step_func = self.step_basic
+        if "attention_mech" in kwargs:
+            self.step_func = self.step_bahdanau if kwargs["attention_mech"] == "bahdanau_attention" \
+                            else self.step_basic
 
         self.teacher_forcing_prob = 1
-        if ("teacher_forcing_prob" in kwargs):
+        if "teacher_forcing_prob" in kwargs:
             self.teacher_forcing_prob = kwargs["teacher_forcing_prob"]
 
         self.gru = nn.GRU(self.hidden_size, self.hidden_size)
         self.projection = nn.Linear(self.hidden_size, self.vocab_size)
-        self.softmax = nn.LogSoftmax(dim=1)
 
-    def step(self, input, hidden, *args, **kwargs):
+    def step_basic(self, input, hidden, *args, **kwargs):
         '''
         Defines one step through the LSTM to predict the next input.
         '''
-        emb_output = self.embeddings(input)
-        context_vec = self.bridge(hidden.transpose(1,2))
-        output = F.relu(emb_output)
-        gru_output, _ = self.gru(output.transpose(0,1), context_vec.permute(2,0,1))
-        output = self.softmax(self.projection(gru_output[0]))
+        emb_output = F.relu(self.embeddings(input))
+        initial_state = self.bridge(hidden.transpose(1,2))
+
+        gru_output, _ = self.gru(emb_output.transpose(0,1), initial_state.permute(2,0,1))
+        output = self.projection(gru_output[0]) # Loss uses logits directly
         return output
 
+    def step_bahdanau(self, input, hidden, *args, **kwargs):
+        '''
+        Defines one step through the LSTM to predict the next input. Uses
+        standard bahdanau attention for decoding.
+        '''
+
+        emb_output = F.relu(self.embeddings(input))
+        initial_state = self.bridge(hidden.transpose(1,2))
+
+        #Bahdanau attenntion
+        alignment_scores = F.softmax(torch.matmul(emb_output, hidden.transpose(1,2)), dim=-1)
+        context_vecs = torch.matmul(alignment_scores, hidden)
+
+        gru_output, _ = self.gru(context_vecs.transpose(0,1), initial_state.permute(2,0,1))
+        output = self.projection(gru_output[0]) # Loss uses logits directly
+        return output
 
     def forward(self, input, hidden, *args, **kwargs):
         '''
@@ -57,7 +75,7 @@ class GRUDec(nn.Module):
 
         if using_teacher_forcing:
             for i in range(self.max_seq_len - 1):
-                curr_prediction = self.step(input[:, :i+1], hidden, *args, **kwargs)
+                curr_prediction = self.step_func(input[:, :i+1], hidden, *args, **kwargs)
                 predictions.append(curr_prediction)
         else:
             sos_token = input[:, 0].unsqueeze(1)
@@ -68,7 +86,7 @@ class GRUDec(nn.Module):
                 else:
                     argmax_predictions = torch.argmax(torch.stack(predictions, dim=1), dim=2)
                     curr_input = torch.cat([sos_token, argmax_predictions], dim=1)
-                curr_prediction = self.step(curr_input, hidden, *args, **kwargs)
+                curr_prediction = self.step_func(curr_input, hidden, *args, **kwargs)
                 predictions.append(curr_prediction)
 
         output = torch.stack(predictions, dim=1)

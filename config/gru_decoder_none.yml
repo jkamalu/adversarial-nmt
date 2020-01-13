@@ -47,3 +47,4 @@ decoder:
     d_model: *d_model
     dropout: 0.1
     teacher_forcing_prob: 0.5
+    attention_mech: bahdanau_attention
