@@ -3,6 +3,7 @@ __author__ = 'John Kamalu'
 ''' Wrapper class oover the onmt TransformerDecoder'''
 
 from onmt.decoders import TransformerDecoder
+import random
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -19,6 +20,10 @@ class GRUDec(nn.Module):
         self.embeddings = kwargs['embeddings'].make_embedding.emb_luts[0]
         self.bridge = nn.Linear(self.max_seq_len , 1)
         #TODO: eventually we also want to incorporate an attention mechanism
+
+        self.teacher_forcing_prob = 1
+        if ("teacher_forcing_prob" in kwargs):
+            self.teacher_forcing_prob = kwargs["teacher_forcing_prob"]
 
         self.gru = nn.GRU(self.hidden_size, self.hidden_size)
         self.projection = nn.Linear(self.hidden_size, self.vocab_size)
@@ -40,17 +45,34 @@ class GRUDec(nn.Module):
         '''
         Input is specified as either teacher forcing or not in the training loop.
         Hidden is the hidden state representation of the BERT encoder.
-        '''
-        predictions = []
-        # keep track of current input to the LSTM model
-        for i in range(self.max_seq_len):
-            curr_prediction = self.step(input[:, :i+1], hidden, *args, **kwargs)
-            predictions.append(curr_prediction)
-        output = torch.cat(predictions, dim=1)
-        print(output.shape)
-        # NOTE: vcheck if this works
 
-        return None
+        We specify a certain probability that we use either teacher forcing or
+        previous predictions - this probability is passed in as a parameter and
+        set to self.teacher_forcing_prob during initialization of the instance.
+        '''
+
+        using_teacher_forcing = True if random.random() < self.teacher_forcing_prob else False
+
+        predictions = []
+
+        if using_teacher_forcing:
+            for i in range(self.max_seq_len - 1):
+                curr_prediction = self.step(input[:, :i+1], hidden, *args, **kwargs)
+                predictions.append(curr_prediction)
+        else:
+            sos_token = input[:, 0].unsqueeze(1)
+            for i in range(self.max_seq_len - 1):
+                # curr_input variable used to keep track of current input to the LSTM model
+                if i == 0:
+                    curr_input = sos_token
+                else:
+                    argmax_predictions = torch.argmax(torch.stack(predictions, dim=1), dim=2)
+                    curr_input = torch.cat([sos_token, argmax_predictions], dim=1)
+                curr_prediction = self.step(curr_input, hidden, *args, **kwargs)
+                predictions.append(curr_prediction)
+
+        output = torch.stack(predictions, dim=1)
+        return output
 
     def init_state(self, *args):
         ''' Implemented for consistency with TransformerDec'''
