@@ -24,19 +24,33 @@ class GRUDec(nn.Module):
         self.projection = nn.Linear(self.hidden_size, self.vocab_size)
         self.softmax = nn.LogSoftmax(dim=1)
 
+    def step(self, input, hidden, *args, **kwargs):
+        '''
+        Defines one step through the LSTM to predict the next input.
+        '''
+        emb_output = self.embeddings(input)
+        context_vec = self.bridge(hidden.transpose(1,2))
+        output = F.relu(emb_output)
+        gru_output, _ = self.gru(output.transpose(0,1), context_vec.permute(2,0,1))
+        output = self.softmax(self.projection(gru_output[0]))
+        return output
+
+
     def forward(self, input, hidden, *args, **kwargs):
         '''
         Input is specified as either teacher forcing or not in the training loop.
         Hidden is the hidden state representation of the BERT encoder.
         '''
+        predictions = []
+        # keep track of current input to the LSTM model
+        for i in range(self.max_seq_len):
+            curr_prediction = self.step(input[:, :i+1], hidden, *args, **kwargs)
+            predictions.append(curr_prediction)
+        output = torch.cat(predictions, dim=1)
+        print(output.shape)
+        # NOTE: vcheck if this works
 
-        emb_output = self.embeddings(input)
-        context_vec = self.bridge(hidden.transpose(1,2))
-        output = F.relu(output)
-        gru_output, gru_hidden = self.gru(output.transpose(0,1), context_vec.permute(2,0,1))
-        output = self.softmax(self.projection(gru_output[0]))
-
-        return output
+        return None
 
     def init_state(self, *args):
         ''' Implemented for consistency with TransformerDec'''
