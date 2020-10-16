@@ -1,6 +1,8 @@
 torch
 torchvision
-OpenNMT-py
+tensorboard
+cudatoolkit
+nltk
 transformers
 scikit-learn
 pyaml

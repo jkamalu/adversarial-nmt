@@ -1,3 +1,6 @@
+## Extract the data
+tar -xzvf fr-en.tgz
+
 ## Shuffling procedure
 shuf --random-source=europarl-v7.fr-en.en europarl-v7.fr-en.en > europarl-v7.fr-en.en.shuf
 shuf --random-source=europarl-v7.fr-en.en europarl-v7.fr-en.fr > europarl-v7.fr-en.fr.shuf

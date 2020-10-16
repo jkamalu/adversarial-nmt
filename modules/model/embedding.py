@@ -1,6 +1,9 @@
-from onmt.modules import embeddings
+from fairseq.models.transformer import Embedding as init_embedding
 
-class Embeddings(embeddings.Embeddings):
+import torch
+
+
+class Embedding(torch.nn.Embedding)
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

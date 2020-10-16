@@ -1,15 +1,82 @@
 __author__ = 'John Kamalu'
 
-''' Wrapper class oover the onmt TransformerDecoder'''
-
-from onmt.decoders import TransformerDecoder
 import random
+from argparse import ArgumentParser, Namespace
+
+from fairseq.models.transformer import TransformerDecoder as FairseqDecoder
+from fairseq.models.transformer import TransformerModel as FairseqModel
+from fairseq.models.transformer import base_architecture
+from fairseq.models.fairseq_encoder import EncoderOut
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 
-class GRUDec(nn.Module):
+class Decoder(nn.Module):
+    
+    def __init__(self, impl):
+        super().__init__()
+
+        self.is_initialized = False
+        self.impl = impl
+    
+    @classmethod
+    def init_from_config(cls, impl, decoder_kwargs, embedding):
+
+        module = cls(impl)
+        
+        module.embedding = embedding
+        module.decoder_kwargs = decoder_kwargs
+        
+        if impl == "fairseq":
+            args = {}
+            
+            # fairseq default args
+            ap = ArgumentParser()
+            FairseqModel.add_args(ap)
+            args.update(vars(ap.parse_args("")))
+            
+            # fairseq base architecture args
+            ns = Namespace(**decoder_kwargs)
+            base_architecture(ns)
+            args.update(vars(ns))
+            
+            # our args
+            args.update(decoder_kwargs)
+            
+            namespace = Namespace(**args)
+            dumb_dict = {0 for _ in range(embedding.weight.shape[0])}
+            
+            module.model = FairseqDecoder(namespace, dumb_dict, embedding)
+        else:
+            raise NotImplementedError()
+            
+        module.is_initialized = True
+            
+        return module
+
+    def forward(self, tgt, enc_out, src_len):
+        assert self.is_initialized
+        
+        if self.impl == "fairseq":
+            
+            B, L, H = enc_out.shape
+                        
+            encoder_out = EncoderOut(
+                enc_out.transpose(0, 1), 
+                torch.arange(L, device=src_len.device).unsqueeze(0).expand((B, L)) - src_len.unsqueeze(1) >= 1,
+                None, 
+                None, 
+                None, 
+                None
+            )
+            output, _ = self.model.forward(tgt, encoder_out=encoder_out, src_lengths=src_len)
+        
+        return output
+
+
+class GRUDecoder(nn.Module):
     def __init__(self, *args, **kwargs):
         super().__init__()
 
@@ -33,7 +100,7 @@ class GRUDec(nn.Module):
 
     def step_basic(self, input, hidden, *args, **kwargs):
         '''
-        Defines one step through the LSTM to predict the next input.
+        Defines one step through the GRU to predict the next input.
         '''
         emb_output = F.relu(self.embeddings(input))
         initial_state = self.bridge(hidden.transpose(1,2))
@@ -44,7 +111,7 @@ class GRUDec(nn.Module):
 
     def step_bahdanau(self, input, hidden, *args, **kwargs):
         '''
-        Defines one step through the LSTM to predict the next input. Uses
+        Defines one step through the GRU to predict the next input. Uses
         standard bahdanau attention for decoding.
         '''
 
@@ -95,49 +162,3 @@ class GRUDec(nn.Module):
     def init_state(self, *args):
         ''' Implemented for consistency with TransformerDec'''
         pass
-
-class TransformerDec(TransformerDecoder):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.vocab_size = self.embeddings.make_embedding.emb_luts[0].num_embeddings
-        self.projection = torch.nn.Linear(kwargs["d_model"], self.vocab_size)
-
-    def forward(self, tgt, memory_bank, memory_lengths, step=None, **kwargs):
-        # OpenNMT-py TransformerDecoder *FOOLISHLY* assume (L, B, D)
-        tgt = tgt.transpose(0, 1).unsqueeze(-1)
-        memory_bank = memory_bank.transpose(0, 1)
-        # OpenNMT-py TransformerEncoder returns out_x, attn_x
-        dec_outs, attns = super().forward(tgt, memory_bank, memory_lengths=memory_lengths, step=step, **kwargs)
-        # Project to the vocabulary dimension and enforce (B, L, D)
-        dec_outs = dec_outs.transpose(0, 1)
-        dec_outs = self.projection(dec_outs)
-        return dec_outs
-
-    def init_state(self, src):
-        # OpenNMT-py TransformerDecoder *FOOLISHLY* assume (L, B, D)
-        src = src.transpose(0, 1).unsqueeze(-1)
-        # OpenNMT-py TransformerDecoder.init_state does not use args[1:3]
-        super().init_state(src, None, None)
-
-
-
-class Decoder(nn.Module):
-    def __init__(self, type, **kwargs):
-        super().__init__(**kwargs)
-        self.type = type
-
-    def forward(self, *args, **kwargs):
-        return self.model(*args, **kwargs)
-
-    @classmethod
-    def init_from_config(cls, type="GRU", *args, **kwargs):
-        assert("embeddings" in kwargs), "Must specify embeddings when initializing a GRU Decoder."
-
-        module = cls(type)
-        if(type == "GRU"):
-            module.model = GRUDec(*args, **kwargs)
-        elif(type == "Transformer"):
-            module.model = TransformerDec(*args, **kwargs)
-        else:
-            raise Exception("Invalid decoder type specified - specify either GRU or Transformer.")
-        return module

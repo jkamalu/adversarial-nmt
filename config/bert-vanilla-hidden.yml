@@ -6,7 +6,7 @@ n_valid: -1
 
 regularization: &regularization
     type:
-        - 
+        - hidden
     n_affine: 0
 
 d_model: &d_model 768
@@ -24,14 +24,14 @@ max_step_num: 100000
 adam:
     lr: 0.00015
 
-encoder: TBD
+encoder: bert
 encoder_kwargs:
     fairseq: # overwrite fairseq base architecture
         encoder_embed_dim: *d_model
     bert:
         
 
-decoder: TBD
+decoder: fairseq
 decoder_kwargs:
     fairseq: # overwrite fairseq base architecture
         encoder_embed_dim: *d_model

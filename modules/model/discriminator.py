@@ -26,8 +26,8 @@ class Discriminator(nn.Module):
         if (self.initial_affine_size > 0):
             self.affine_combo = nn.Linear(self.initial_affine_size, 1)
 
-        self.ff_1 = nn.Linear(self.hidden_dim, self.hidden_dim //2)
-        self.ff_2 = nn.Linear(self.hidden_dim //2, self.output_dim)
+        self.ff_1 = nn.Linear(self.hidden_dim, self.hidden_dim)
+        self.ff_2 = nn.Linear(self.hidden_dim, self.output_dim)
 
     def forward(self, x):
         if (self.regularization == "attention"):
