@@ -11,6 +11,8 @@ Install all depencies with conda and pip. Ensure `pip` points to the correspondi
 1. `conda install pytorch torchvision cudatoolkit=XX.X -c pytorch` where `XX.X` will depend on your CUDA installation
 2. `which pip`
 3. `pip install -r requirements.txt`
+4. `git clone https://github.com/pytorch/fairseq`
+5. `cd fairseq && pip install -e ./`
 
 ## Data
 

@@ -1,7 +1,4 @@
-torch
-torchvision
 tensorboard
-cudatoolkit
 nltk
 transformers
 scikit-learn
