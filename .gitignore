@@ -1,4 +1,5 @@
 .DS_Store
+fairseq
 OpenNMT-py
 data
 europarl-v7

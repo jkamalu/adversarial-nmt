@@ -1,59 +1,51 @@
 __author__ = 'Richard Diehl Martinez, John Kamalu'
-'''
-General dataset class. Reads in the torch TextDataset and stores the data
-in the form of a more basic torch Dataset class. Eventually, we want to
-change this back to a torch TextDataset class.
-'''
 
-import torch
 import os
-import logging
 import pickle
+import logging
+
 from tqdm import tqdm_notebook as tqdm
 
+import torch
 from torch.utils.data import Dataset
 
+
 class Collator(object):
-    ''' colltor object which can be called by the dataloader class for processing batches.'''
-    def __init__(self, maxlen=50):
-        self.max_len = maxlen # standardized length
+
+    def __init__(self, maxlen):
+        self.maxlen = maxlen
 
     def __call__(self, data):
-        input_sentences, output_sentences = zip(*data)
+        sentences_l1, sentences_l2 = zip(*data)
 
-        input_lengths = [len(sentence) for sentence in input_sentences]
-        output_lengths = [len(sentence) for sentence in output_sentences]
+        lengths_l1 = [len(sentence) for sentence in sentences_l1]
+        lengths_l2 = [len(sentence) for sentence in sentences_l2]
 
-        batch_size = len(input_sentences)
+        batch_size = len(sentences_l1)
 
-        input_idx_tensor = torch.zeros((batch_size, self.max_len), dtype=torch.long)
-        output_idx_tensor = torch.zeros((batch_size, self.max_len), dtype=torch.long)
+        idx_tensor_l1 = torch.zeros((batch_size, self.maxlen), dtype=torch.long)
+        idx_tensor_l2 = torch.zeros((batch_size, self.maxlen), dtype=torch.long)
 
-        input_idx_tensor_no_eos = torch.zeros((batch_size, self.max_len-1), dtype=torch.long)
-        output_idx_tensor_no_eos = torch.zeros((batch_size, self.max_len-1), dtype=torch.long)
+        idx_tensor_no_eos_l1 = torch.zeros((batch_size, self.maxlen - 1), dtype=torch.long)
+        idx_tensor_no_eos_l2 = torch.zeros((batch_size, self.maxlen - 1), dtype=torch.long)
 
-        for idx, (sentence_len, input_sentence) in enumerate(zip(input_lengths, input_sentences)):
-            input_idx_tensor[idx, :] = torch.tensor(input_sentence + [1]*(self.max_len-sentence_len))
-            input_idx_tensor_no_eos[idx, :] = torch.tensor(input_sentence[:-1] + [1]*(self.max_len-sentence_len))
+        for idx, (sentence_len, sentence_l1) in enumerate(zip(lengths_l1, sentences_l1)):
+            idx_tensor_l1[idx, :] = torch.tensor(sentence_l1 + [1]*(self.maxlen - sentence_len))
+            idx_tensor_no_eos_l1[idx, :] = torch.tensor(sentence_l1[:-1] + [1] * (self.maxlen - sentence_len))
 
-        for idx, (sentence_len, output_sentence) in enumerate(zip(output_lengths, output_sentences)):
-            output_idx_tensor[idx, :] = torch.tensor(output_sentence + [1]*(self.max_len-sentence_len))
-            output_idx_tensor_no_eos[idx, :] = torch.tensor(output_sentence[:-1] + [1]*(self.max_len-sentence_len))
-
-        return ((input_idx_tensor, input_idx_tensor_no_eos, torch.tensor(input_lengths)), (output_idx_tensor, output_idx_tensor_no_eos, torch.tensor(output_lengths)))
+        for idx, (sentence_len, sentence_l2) in enumerate(zip(lengths_l2, sentences_l2)):
+            idx_tensor_l2[idx, :] = torch.tensor(sentence_l2 + [1]*(self.maxlen - sentence_len))
+            idx_tensor_no_eos_l2[idx, :] = torch.tensor(sentence_l2[:-1] + [1] * (self.maxlen - sentence_len))
+            
+        return (
+            (idx_tensor_l1, idx_tensor_no_eos_l1, torch.tensor(lengths_l1)),
+            (idx_tensor_l2, idx_tensor_no_eos_l2, torch.tensor(lengths_l2))
+        )
 
 
 class TextDataset(Dataset):
-    def __init__(self, directory,
-                       tokenizer_en,
-                       tokenizer_fr,
-                       training=True,
-                       minlen=2,
-                       maxlen=50,
-                       size=-1):
-        '''
-        Requires passing in a folder to where the dataset is stored
-        '''
+    
+    def __init__(self, directory, tokenizer_en, tokenizer_fr, training=True, minlen=2, maxlen=50, size=-1):
 
         # data is stored as a list of tuples of strings (l1-l2)
         self.tokenizer_en = tokenizer_en
@@ -77,7 +69,6 @@ class TextDataset(Dataset):
         if pkl_file:
             # Loading in from stored out pkl files
             load_in_file = os.path.join(directory, pkl_file[0])
-            print("**Loading in pre-saved file: {}".format(load_in_file))
             return pickle.load(open(load_in_file, "rb"))
 
         files = filter(lambda fd: fd.endswith(mode), os.listdir(directory))
@@ -87,7 +78,7 @@ class TextDataset(Dataset):
             while True:
                 
                 if (read_counter % 10000 == 0):
-                    print("Reading in example: {}".format(read_counter))
+                    print("{} examples processed.".format(read_counter))
                     
                 read_counter += 1
                 line_en = en.readline()
@@ -111,7 +102,6 @@ class TextDataset(Dataset):
                     removed_count_short += 1
                     continue
 
-
                 tokenized_en = self.tokenizer_en.encode(line_en)
                 tokenized_fr = self.tokenizer_fr.encode(line_fr)
 
@@ -131,10 +121,9 @@ class TextDataset(Dataset):
                 if len(parallel_data) >= size and size > 0:
                     break
 
-        print("{} examples with length < {} removed.".format(removed_count_short, minlen))
-        print("{} examples with length > {} removed.".format(removed_count_long, maxlen))
+        print("# examples with length < {} removed: {}".format(minlen, removed_count_short))
+        print("# examples with length > {} removed: {}".format(maxlen, removed_count_long))
 
-        print("**Saving out file")
         saved_out_file = open(os.path.join(directory, "data.{}.pkl".format(mode)), 'wb')
         pickle.dump(parallel_data, saved_out_file)
 
@@ -144,5 +133,4 @@ class TextDataset(Dataset):
         return len(self.parallel_data)
 
     def __getitem__(self, idx):
-        '''Returning token indices '''
         return self.parallel_data[idx]

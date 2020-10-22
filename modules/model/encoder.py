@@ -27,13 +27,12 @@ class Encoder(nn.Module):
         self.impl = impl
 
     @classmethod
-    def init_from_config(cls, impl, encoder_kwargs, embedding=None, language=None):
+    def init_from_config(cls, impl, encoder_kwargs, language):
         module = cls(impl)
         
         if impl == "bert":
             _, model_class, weights = MODEL_CLASSES[language]
             module.model = model_class.from_pretrained(weights)
-            module.embeddings = module.model.get_input_embeddings()
         else:
             raise NotImplementedError
 
