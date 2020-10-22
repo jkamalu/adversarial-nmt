@@ -2,9 +2,9 @@
 
 ## Installation
 
-We use Anaconda virtual environments to manage dependencies. Create and activate a new virtual environment with Python 3.6
-1. `conda create -n adversarial-nmt python=3.6`
-2. `source path/to/anaconda/binaries/activate`
+We use Anaconda virtual environments to manage dependencies. Install Anaconda or [Miniconda](https://docs.conda.io/en/latest/miniconda.html) and activate the base environment. Then create and activate a new virtual environment with Python 3.6
+1. `source /path/to/conda/bin/activate`
+2. `conda create -n adversarial-nmt python=3.6`
 3. `conda activate adversarial-nmt`
 
 Install all depencies with conda and pip. Ensure `pip` points to the corresponding virtual environment binary. 
@@ -32,7 +32,7 @@ We use the europarl-v7 English-French parallel corpus. Download, unzip, shuffle,
 
 ## Jupyter
 
-We use Jupyter notebooks for development and visualization (subject to change). Launch a Jupyter server and open `Run.ipynb`.
+We use Jupyter notebooks for development and visualization (subject to change). Launch a Jupyter server and open `Run.ipynb`. Ensure `jupyter` points to the corresponding virtual environment binary. 
 
 1. `which jupyter`
 2. `jupyter notebook --ip=0.0.0.0 --port=XXXX --no-browser &` where `XXXX` corresponds to an exposed port on your machine. For SAIL, we can use `8880`.
