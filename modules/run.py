@@ -204,7 +204,7 @@ def valid(model, dataloader, config):
 
             metrics_dict["en-fr"]["bleu"].append([])
             metrics_dict["fr-en"]["bleu"].append([])
-            for idx in range(config["batch_size"] * config["world_size"]):
+            for idx in range(config["batch_size"]):
                 text_real_fr = dataloader.dataset.tokenizer_fr.decode(sents_fr[idx, 1:-1].tolist())
                 text_pred_fr = dataloader.dataset.tokenizer_fr.decode(preds_fr[idx, 0:-1].tolist())
                 metrics_dict["en-fr"]["bleu"][-1].append(sentence_bleu([text_real_fr], text_pred_fr))
