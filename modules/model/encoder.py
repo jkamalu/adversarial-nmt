@@ -13,8 +13,8 @@ from transformers import (RobertaConfig, RobertaModel, RobertaTokenizer,
 
 
 MODEL_CLASSES = {
-    'english': (RobertaConfig, RobertaModel, "roberta-base"),
-    'french': (CamembertConfig, CamembertModel, "camembert-base")
+    'en': (RobertaConfig, RobertaModel, "roberta-base"),
+    'fr': (CamembertConfig, CamembertModel, "camembert-base")
 }
 
 

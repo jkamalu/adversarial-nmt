@@ -5,7 +5,6 @@ from torch.optim import Adam
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
-from modules.data import Collator
 from modules.model import Encoder, Discriminator, BidirectionalTranslator
 from modules.metrics import loss_fn, exact_match, sentence_bleu, write_to_tensorboard
 from modules.utils import init_output_dirs
@@ -45,7 +44,6 @@ def load_checkpoint(model, optimizer, step, loss, ckpt_dir):
 
     
 def train(model, dataset_train, dataset_valid, config):    
-    collate_fn = Collator(config["maxlen"])
     
     model.cuda()
     
@@ -54,15 +52,14 @@ def train(model, dataset_train, dataset_valid, config):
         batch_size=config["batch_size"], 
         shuffle=True,
         pin_memory=True,
-        collate_fn=collate_fn
+        num_workers=8
     )
 
     dataloader_valid = DataLoader(
         dataset_valid, 
-        config["batch_size"], 
+        batch_size=config["batch_size"], 
         shuffle=True, 
-        pin_memory=True,
-        collate_fn=collate_fn
+        pin_memory=True
     )
 
     writer = SummaryWriter(config["runs_dir"])
@@ -71,10 +68,10 @@ def train(model, dataset_train, dataset_valid, config):
     
     for batch_i, batch in enumerate(dataloader_train):
 
-        # Unpack batch and move to device
-        batch_en, batch_fr = batch
-        sents_en, sents_no_eos_en, lengths_en = map(lambda t: t.cuda(), batch_en)
-        sents_fr, sents_no_eos_fr, lengths_fr = map(lambda t: t.cuda(), batch_fr)
+        # Unpack the batch and move to device
+        batch_l1, batch_l2 = batch
+        sents_l1, sents_no_eos_l1, lengths_l1 = map(lambda t: t.cuda(), batch_l1)
+        sents_l2, sents_no_eos_l2, lengths_l2 = map(lambda t: t.cuda(), batch_l2)
 
         # Clear optimizer
         optimizer.zero_grad()
@@ -87,14 +84,14 @@ def train(model, dataset_train, dataset_valid, config):
             save_weights(model, optimizer, batch_i)
 
         # Save weights and terminate training
-        if batch_i > 0 and batch_i >= config["max_step_num"]:
+        if batch_i > 0 and batch_i >= config["n_train_steps"]:
             save_weights(model, optimizer, batch_i)
             break
 
         # Unpack the batch, run the encoders, run the decoders
-        sents_en, sents_fr, enc_out_en, enc_out_fr, dec_out_en, dec_out_fr = model(
-            sents_en, sents_no_eos_en, lengths_en,
-            sents_fr, sents_no_eos_fr, lengths_fr
+        sents_l1, sents_l2, enc_out_l1, enc_out_l2, dec_out_l1, dec_out_l2 = model(
+            sents_l1, sents_no_eos_l1, lengths_l1,
+            sents_l2, sents_no_eos_l2, lengths_l2
         )
 
         # Initial default values for regularization 
@@ -106,16 +103,17 @@ def train(model, dataset_train, dataset_valid, config):
         # Gather hidden discriminator labels/predictions
         if "hidden" in config["regularization"]["type"]:
             # Use the pooled outputs of the encoders for regularization
-            y_hddn_pred_en = model.discriminate("hidden", enc_out_en)
-            y_hddn_pred_fr = model.discriminate("hidden", enc_out_fr)
-            y_hddn_pred = torch.cat([y_hddn_pred_en, y_hddn_pred_fr])
+            y_hddn_pred_l1 = model.discriminate("hidden", enc_out_l1)
+            y_hddn_pred_l2 = model.discriminate("hidden", enc_out_l2)
+            y_hddn_pred = torch.cat([y_hddn_pred_l1, y_hddn_pred_l2])
             real_pred_ys["hidden"] = y_real, y_hddn_pred
 
-        loss, loss_en2fr, loss_fr2en, reg_losses = loss_fn(
-            sents_en[:, 1:], sents_fr[:, 1:],
-            dec_out_en, dec_out_fr, 
+        loss, loss_l2, loss_l1, reg_losses = loss_fn(
+            sents_l1[:, 1:], sents_l2[:, 1:],
+            dec_out_l1, dec_out_l2, 
             real_pred_ys,
-            ignore_index=1
+            ignore_index_l1=dataset_train.tokenizer_l1.pad_token_id,
+            ignore_index_l2=dataset_train.tokenizer_l2.pad_token_id
         )
                 
         # Optimize trainable parameters
@@ -125,10 +123,10 @@ def train(model, dataset_train, dataset_valid, config):
         # Write training losses/metrics to stdout and tensorboard
         if batch_i > 0 and batch_i % config["log_frequency"] == 0:
             
-            print("Step {}: loss {}, en-fr {}, fr-en {}, hddn {}".format(
-                str(batch_i).zfill(6), loss.item(), loss_en2fr.item(), loss_fr2en.item(), reg_losses["hidden"].item()))
+            print("Step {}: loss {}, l1-l2 {}, l2-l1 {}, hddn {}".format(
+                str(batch_i).zfill(6), loss.item(), loss_l2.item(), loss_l1.item(), reg_losses["hidden"].item()))
 
-            cce_metrics = {"en-fr": loss_en2fr.item(), "fr-en": loss_fr2en.item()}
+            cce_metrics = {"l1-l2": loss_l2.item(), "l2-l1": loss_l1.item()}
             write_to_tensorboard("CCE", cce_metrics, training=True, step=batch_i, writer=writer)
 
             bce_metrics = {"hddn": reg_losses["hidden"].item()}
@@ -139,8 +137,8 @@ def train(model, dataset_train, dataset_valid, config):
             metrics_dict = valid(model, dataloader_valid, config)
             
             metrics_dict_tb = lambda key: {
-                "en-fr": metrics_dict["en-fr"][key],
-                "fr-en": metrics_dict["fr-en"][key]
+                "l1-l2": metrics_dict["l1-l2"][key],
+                "l2-l1": metrics_dict["l2-l1"][key]
             }
 
             write_to_tensorboard("CCE", metrics_dict_tb("loss"), training=False, step=batch_i, writer=writer)
@@ -154,10 +152,9 @@ def evaluate(model, dataset, config):
     
     dataloader = DataLoader(
         dataset, 
-        config["batch_size"], 
+        batch_size=config["batch_size"], 
         shuffle=True, 
-        pin_memory=True,
-        collate_fn=Collator(config["maxlen"])
+        pin_memory=True
     )
 
     valid(model, dataloader, config)
@@ -170,54 +167,59 @@ def valid(model, dataloader, config):
         model.eval()
         
     metrics_dict = {
-        "fr-en": defaultdict(list),
-        "en-fr": defaultdict(list)
+        "l2-l1": defaultdict(list),
+        "l1-l2": defaultdict(list)
     }
 
     with torch.no_grad():
 
         for batch_j, batch in enumerate(dataloader):
             
-            if (batch_j == config["n_valid"]):
+            if is_training and batch_j >= config["n_valid_steps"]:
                 break
+            elif not config["do_full_eval"] and batch_j >= config["n_valid_steps"]:
+                break
+            else:
+                pass
             
-            batch_en, batch_fr = batch
-            sents_en, sents_no_eos_en, lengths_en = map(lambda t: t.cuda(), batch_en)
-            sents_fr, sents_no_eos_fr, lengths_fr = map(lambda t: t.cuda(), batch_fr)
+            batch_l1, batch_l2 = batch
+            sents_l1, sents_no_eos_l1, lengths_l1 = map(lambda t: t.cuda(), batch_l1)
+            sents_l2, sents_no_eos_l2, lengths_l2 = map(lambda t: t.cuda(), batch_l2)
 
-            sents_en, sents_fr, enc_out_en, enc_out_fr, dec_out_en, dec_out_fr = model(
-                sents_en, sents_no_eos_en, lengths_en,
-                sents_fr, sents_no_eos_fr, lengths_fr
+            sents_l1, sents_l2, enc_out_l1, enc_out_l2, dec_out_l1, dec_out_l2 = model(
+                sents_l1, sents_no_eos_l1, lengths_l1,
+                sents_l2, sents_no_eos_l2, lengths_l2
             )
             
-            loss_all, loss_fr, loss_en, loss_reg = loss_fn(
-                sents_en[:, 1:], sents_fr[:, 1:],
-                dec_out_en, dec_out_fr,
-                ignore_index=1
+            loss, loss_l2, loss_l1, reg_losses = loss_fn(
+                sents_l1[:, 1:], sents_l2[:, 1:],
+                dec_out_l1, dec_out_l2, 
+                ignore_index_l1=dataloader.dataset.tokenizer_l1.pad_token_id,
+                ignore_index_l2=dataloader.dataset.tokenizer_l2.pad_token_id
             )
 
-            metrics_dict["en-fr"]["loss"].append(loss_fr.item())
-            metrics_dict["fr-en"]["loss"].append(loss_en.item())
+            metrics_dict["l1-l2"]["loss"].append(loss_l2.item())
+            metrics_dict["l2-l1"]["loss"].append(loss_l1.item())
 
-            preds_fr = torch.argmax(dec_out_fr, dim=-1)
-            preds_en = torch.argmax(dec_out_en, dim=-1)
+            preds_l1 = torch.argmax(dec_out_l1, dim=-1)
+            preds_l2 = torch.argmax(dec_out_l2, dim=-1)
 
-            metrics_dict["en-fr"]["bleu"].append([])
-            metrics_dict["fr-en"]["bleu"].append([])
+            metrics_dict["l1-l2"]["bleu"].append([])
+            metrics_dict["l2-l1"]["bleu"].append([])
             for idx in range(config["batch_size"] * config["world_size"]):
-                text_real_fr = dataloader.dataset.tokenizer_fr.decode(sents_fr[idx, 1:-1].tolist())
-                text_pred_fr = dataloader.dataset.tokenizer_fr.decode(preds_fr[idx, 0:-1].tolist())
-                metrics_dict["en-fr"]["bleu"][-1].append(sentence_bleu([text_real_fr], text_pred_fr))
-                text_real_en = dataloader.dataset.tokenizer_en.decode(sents_en[idx, 1:-1].tolist())
-                text_pred_en = dataloader.dataset.tokenizer_en.decode(preds_en[idx, 0:-1].tolist())
-                metrics_dict["fr-en"]["bleu"][-1].append(sentence_bleu([text_real_en], text_pred_en))
-            metrics_dict["en-fr"]["bleu"][-1] = sum(metrics_dict["en-fr"]["bleu"][-1]) \
-                                                    / len(metrics_dict["en-fr"]["bleu"][-1])
-            metrics_dict["fr-en"]["bleu"][-1] = sum(metrics_dict["fr-en"]["bleu"][-1]) \
-                                                    / len(metrics_dict["fr-en"]["bleu"][-1])
+                text_real_l2 = dataloader.dataset.tokenizer_l2.decode(sents_l2[idx, 1:-1].tolist())
+                text_pred_l2 = dataloader.dataset.tokenizer_l2.decode(preds_l2[idx, 0:-1].tolist())
+                metrics_dict["l1-l2"]["bleu"][-1].append(sentence_bleu([text_real_l2], text_pred_l2))
+                text_real_l1 = dataloader.dataset.tokenizer_l1.decode(sents_l1[idx, 1:-1].tolist())
+                text_pred_l1 = dataloader.dataset.tokenizer_l1.decode(preds_l1[idx, 0:-1].tolist())
+                metrics_dict["l2-l1"]["bleu"][-1].append(sentence_bleu([text_real_l1], text_pred_l1))
+            metrics_dict["l1-l2"]["bleu"][-1] = sum(metrics_dict["l1-l2"]["bleu"][-1]) \
+                                                    / len(metrics_dict["l1-l2"]["bleu"][-1])
+            metrics_dict["l2-l1"]["bleu"][-1] = sum(metrics_dict["l2-l1"]["bleu"][-1]) \
+                                                    / len(metrics_dict["l2-l1"]["bleu"][-1])
 
-            metrics_dict["en-fr"]["em"].append(exact_match(preds_fr[:, 0:-1], sents_fr[:, 1:-1]))
-            metrics_dict["fr-en"]["em"].append(exact_match(preds_en[:, 0:-1], sents_en[:, 1:-1]))
+            metrics_dict["l1-l2"]["em"].append(exact_match(preds_l2[:, 0:-1], sents_l2[:, 1:-1], ignore_index=dataloader.dataset.tokenizer_l2.pad_token_id))
+            metrics_dict["l2-l1"]["em"].append(exact_match(preds_l1[:, 0:-1], sents_l1[:, 1:-1], ignore_index=dataloader.dataset.tokenizer_l1.pad_token_id))
 
     if is_training:
         model.train()
@@ -226,8 +228,8 @@ def valid(model, dataloader, config):
         for metric in metrics_dict[language]:
             metrics_dict[language][metric] = sum(metrics_dict[language][metric]) / config["n_valid"]
 
-    print("Loss: en-fr {:.3},\t fr-en {:.3}".format(metrics_dict["en-fr"]["loss"], metrics_dict["fr-en"]["loss"]))
-    print("BLEU: en-fr {:.3},\t fr-en {:.3}".format(metrics_dict["en-fr"]["bleu"], metrics_dict["fr-en"]["bleu"]))
-    print("EM  : en-fr {:.3},\t fr-en {:.3}".format(metrics_dict["en-fr"]["em"], metrics_dict["fr-en"]["em"]))
+    print("Loss: l1-l2 {:.3},\t l2-l1 {:.3}".format(metrics_dict["l1-l2"]["loss"], metrics_dict["l2-l1"]["loss"]))
+    print("BLEU: l1-l2 {:.3},\t l2-l1 {:.3}".format(metrics_dict["l1-l2"]["bleu"], metrics_dict["l2-l1"]["bleu"]))
+    print("EM  : l1-l2 {:.3},\t l2-l1 {:.3}".format(metrics_dict["l1-l2"]["em"], metrics_dict["l2-l1"]["em"]))
     
     return metrics_dict

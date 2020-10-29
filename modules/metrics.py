@@ -11,7 +11,7 @@ def write_to_tensorboard(base, metrics, training, step, writer):
 
     Example usage:
         writer = SummaryWriter("runs/regularize_hidden")
-        write_to_tensorboard("CCE", {'fr-en': 0.5, 'fr-en': 0.4}, True, 42, writer)
+        write_to_tensorboard("CCE", {'l1-l2': 0.5, 'l2-l1': 0.4}, True, 42, writer)
     """
 
     tag = "{}/{}".format(base, "train" if training else "val")
@@ -19,14 +19,15 @@ def write_to_tensorboard(base, metrics, training, step, writer):
     writer.add_scalars(tag, metrics, step)
 
 
-def loss_fn(real_en, real_fr, pred_en, pred_fr, real_pred_ys={}, ignore_index=1):
+def loss_fn(real_l1, real_l2, pred_l1, pred_l2, real_pred_ys={}, ignore_index_l1=1, ignore_index_l2=1):
     '''
     Adversarial Loss: standard loss with binary cross entropy on top of the discriminator outputs
     '''
-    cce_loss = torch.nn.CrossEntropyLoss(ignore_index=ignore_index)
+    cce_loss_l2 = torch.nn.CrossEntropyLoss(ignore_index=ignore_index_l2)
+    cce_loss_l1 = torch.nn.CrossEntropyLoss(ignore_index=ignore_index_l1)
     
-    loss_en2fr = cce_loss(pred_fr.transpose(1,2), real_fr)
-    loss_fr2en = cce_loss(pred_en.transpose(1,2), real_en)
+    loss_l2 = cce_loss_l2(pred_l2.transpose(1,2), real_l2)
+    loss_l1 = cce_loss_l1(pred_l1.transpose(1,2), real_l1)
     
     bce_loss = torch.nn.BCEWithLogitsLoss()
     reg_losses = defaultdict(lambda: torch.tensor(0.0))
@@ -34,7 +35,7 @@ def loss_fn(real_en, real_fr, pred_en, pred_fr, real_pred_ys={}, ignore_index=1)
         real_y, pred_y = real_pred_ys[regularization]
         reg_losses[regularization] = bce_loss(pred_y, real_y)
 
-    return loss_en2fr + loss_fr2en + torch.sum(torch.tensor(list(reg_losses.values()))), loss_en2fr, loss_fr2en, reg_losses
+    return loss_l2 + loss_l1 + torch.sum(torch.tensor(list(reg_losses.values()))), loss_l2, loss_l1, reg_losses
 
 
 def exact_match(pred, real, ignore_index=1):

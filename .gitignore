@@ -2,6 +2,7 @@
 fairseq
 OpenNMT-py
 data
+experiments
 europarl-v7
 glove_dir
 connect_to_gcp.sh

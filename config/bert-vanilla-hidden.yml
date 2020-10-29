@@ -1,8 +1,22 @@
+l1: fr
+l2: en
+seed: 330
+
 batch_size: &batch_size 32
-minlen: &minlen 2
+minlen: &minlen 3
 maxlen: &maxlen 50
-n_train: -1
-n_valid: 100
+
+log_frequency: 100
+val_frequency: 1000
+checkpoint_frequency: 50000
+
+n_valid: 10000
+n_train_steps: 2000
+n_valid_steps: 100
+do_full_eval: False
+
+adam:
+    lr: 0.00015
 
 regularization: &regularization
     type:
@@ -10,14 +24,6 @@ regularization: &regularization
     n_affine: 0
 
 d_model: &d_model 768
-
-log_frequency: 100
-val_frequency: 1000
-checkpoint_frequency: 50000
-max_step_num: 100000
-
-adam:
-    lr: 0.00015
 
 encoder: bert
 encoder_kwargs:
@@ -34,12 +40,6 @@ decoder_kwargs:
         decoder_ffn_embed_dim: 2048
         max_target_positions: *maxlen
         share_decoder_input_output_embed: True
-    gru:
-        maxlen: *maxlen
-        d_model: *d_model
-        dropout: 0.1
-        teacher_forcing_prob: 0.5
-        attention_mech: bahdanau_attention
         
 discriminator_kwargs:
     << : *regularization

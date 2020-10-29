@@ -5,40 +5,53 @@ from argparse import ArgumentParser
 
 from transformers import RobertaTokenizer, CamembertTokenizer
 
-import torch
+import torch; torch.autograd.set_detect_anomaly(True)
 import torch.multiprocessing as mp
+from torch.utils.data import Subset
 
-from modules.data import TextDataset
+from modules.data import EuroparlDataset
 from modules.run import train, evaluate
 from modules.utils import load_config, path_to_data, path_to_config
 from modules.model import BidirectionalTranslator
 
 
+TOKENIZERS = {
+    "en": lambda: RobertaTokenizer.from_pretrained('roberta-base'),
+    "fr": lambda: CamembertTokenizer.from_pretrained('camembert-base')
+}
+
+DATA = {
+    frozenset(["en", "fr"]): {"en":"europarl-v7.fr-en.en", "fr":"europarl-v7.fr-en.fr"}
+}
+
+
 def datasets(config):
     data_path = path_to_data("europarl-v7")
     
-    tokenizer_en = RobertaTokenizer.from_pretrained('roberta-base')
-    tokenizer_fr = CamembertTokenizer.from_pretrained('camembert-base')
+    tokenizer_l1 = TOKENIZERS[config["l1"]]()
+    tokenizer_l2 = TOKENIZERS[config["l2"]]()
     
-    dataset_train = None
-    if config["mode"] == "train":
-        dataset_train = TextDataset(
-            data_path, 
-            tokenizer_en, 
-            tokenizer_fr, 
-            training=True, 
-            minlen=config["minlen"],
-            maxlen=config["maxlen"]
-        )
-
-    dataset_valid = TextDataset(
+    pair = frozenset([config["l1"], config["l2"]])
+    
+    dataset = EuroparlDataset.to_hdf5(
         data_path,
-        tokenizer_en, 
-        tokenizer_fr, 
-        training=False, 
-        minlen=config["minlen"],
-        maxlen=config["maxlen"]
+        os.path.join(data_path, DATA[pair][config["l1"]]),
+        os.path.join(data_path, DATA[pair][config["l2"]]),
+        tokenizer_l1,
+        tokenizer_l2,
+        config["minlen"],
+        config["maxlen"]
     )
+    
+    dataset_train, dataset_valid = torch.utils.data.random_split(
+        dataset,
+        [len(dataset) - config["n_valid"], config["n_valid"]],
+        generator=torch.Generator().manual_seed(config["seed"])
+    )
+    
+    # monkey patch torch.utils.data.Subset
+    Subset.tokenizer_l1 = dataset.tokenizer_l1
+    Subset.tokenizer_l2 = dataset.tokenizer_l2
     
     return dataset_train, dataset_valid
 
