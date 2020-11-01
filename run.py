@@ -65,15 +65,16 @@ def main(args):
     logging.info("creating europarl-v7 datasets.")    
     dataset_train, dataset_valid = datasets(config)
     
-    logging.info("creating bidirectional translator.")
+    logging.info("creating bidirectional translator and optimizer")
     model = BidirectionalTranslator(config)
+    optimizer = Adam(model.parameters(), **config["adam"])
     
     logging.info("starting the {} routine.".format(config["mode"]))
     if config["dist"]:
         raise NotImplementedError("Must redesign data pipeline before distributed data parallel training is feasible.")
     else:
         if config["mode"] == "train":
-            train(model, dataset_train, dataset_valid, config)
+            train(model, optimizer, dataset_train, dataset_valid, config)
         else:
             evaluate(model, dataset_valid, config)
 

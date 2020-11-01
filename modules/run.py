@@ -26,9 +26,9 @@ def save_checkpoint(model, optimizer, step, loss, ckpt_dir):
     ckpt = "{0}-{1:e}.pt".format(str(step).zfill(6), step)
     
     torch.save({
-        'model_state_dict': model.state_dict(),
-        'optimizer_state_dict': optimizer.state_dict(),
-        'step': step,
+        "model_state_dict": model.state_dict(),
+        "optimizer_state_dict": optimizer.state_dict(),
+        "step": step,
     }, os.path.join(ckpt_dir, ckpt))
     
 
@@ -37,13 +37,13 @@ def load_checkpoint(model, optimizer, step, loss, ckpt_dir):
     
     state_dict = torch.load(os.path.join(ckpt_dir, ckpt))
     
-    model.load_state_dict(state_dict['model_state_dict'])
-    optimizer.load_state_dict(state_dict['optimizer_state_dict'])
+    model.load_state_dict(state_dict["model_state_dict"])
+    optimizer.load_state_dict(state_dict["optimizer_state_dict"])
     
-    return model, optimizer
+    return model, optimizer, state_dict["step"]
 
     
-def train(model, dataset_train, dataset_valid, config):    
+def train(model, optimizer, dataset_train, dataset_valid, batch_i, config):    
     
     model.cuda()
     
@@ -64,9 +64,9 @@ def train(model, dataset_train, dataset_valid, config):
 
     writer = SummaryWriter(config["runs_dir"])
     
-    optimizer = Adam(model.parameters(), **config["adam"])
-    
-    for batch_i, batch in enumerate(dataloader_train):
+    for batch in dataloader_train:
+        
+        batch_i += 1
 
         # Unpack the batch and move to device
         batch_l1, batch_l2 = batch
@@ -81,11 +81,11 @@ def train(model, dataset_train, dataset_valid, config):
 
         # Save weights and continue training
         if batch_i > 0 and batch_i % config["checkpoint_frequency"] == 0:
-            save_weights(model, optimizer, batch_i)
+            save_checkpoint(model, optimizer, batch_i)
 
         # Save weights and terminate training
         if batch_i > 0 and batch_i >= config["n_train_steps"]:
-            save_weights(model, optimizer, batch_i)
+            save_checkpoint(model, optimizer, batch_i)
             break
 
         # Unpack the batch, run the encoders, run the decoders
@@ -95,27 +95,28 @@ def train(model, dataset_train, dataset_valid, config):
         )
 
         # Initial default values for regularization 
-        real_pred_ys = {}
+        real_pred_l1 = {}
+        real_pred_l2 = {}
         switch = batch_i % 2 == 0
-        y_real = [float(switch)] * config["batch_size"] + [float(not switch)] * config["batch_size"]
-        y_real = torch.tensor(y_real).unsqueeze(-1).cuda()
+        real_l1 = torch.tensor([float(switch)] * config["batch_size"]).unsqueeze(-1).cuda()
+        real_l2 = torch.tensor([float(not switch)] * config["batch_size"]).unsqueeze(-1).cuda() 
 
         # Gather hidden discriminator labels/predictions
         if "hidden" in config["regularization"]["type"]:
             # Use the pooled outputs of the encoders for regularization
-            y_hddn_pred_l1 = model.discriminate("hidden", enc_out_l1)
-            y_hddn_pred_l2 = model.discriminate("hidden", enc_out_l2)
-            y_hddn_pred = torch.cat([y_hddn_pred_l1, y_hddn_pred_l2])
-            real_pred_ys["hidden"] = y_real, y_hddn_pred
+            pred_hddn_l1 = model.discriminate("hidden", enc_out_l1)
+            pred_hddn_l2 = model.discriminate("hidden", enc_out_l2)
+            real_pred_l1["hidden"] = real_l1, pred_hddn_l1
+            real_pred_l2["hidden"] = real_l2, pred_hddn_l2
 
-        loss, loss_l2, loss_l1, reg_losses = loss_fn(
+        loss, loss_l2, loss_l1, reg_loss_l1, reg_loss_l2 = loss_fn(
             sents_l1[:, 1:], sents_l2[:, 1:],
             dec_out_l1, dec_out_l2, 
-            real_pred_ys,
+            real_pred_l1, real_pred_l2,
             ignore_index_l1=dataset_train.tokenizer_l1.pad_token_id,
             ignore_index_l2=dataset_train.tokenizer_l2.pad_token_id
         )
-                
+
         # Optimize trainable parameters
         loss.backward()
         optimizer.step()
@@ -123,13 +124,17 @@ def train(model, dataset_train, dataset_valid, config):
         # Write training losses/metrics to stdout and tensorboard
         if batch_i > 0 and batch_i % config["log_frequency"] == 0:
             
-            print("Step {}: loss {}, l1-l2 {}, l2-l1 {}, hddn {}".format(
-                str(batch_i).zfill(6), loss.item(), loss_l2.item(), loss_l1.item(), reg_losses["hidden"].item()))
+            print("Step {}: loss {}, l1-l2 {}, l2-l1 {}, hidden l1 {}, hidden l2 {}".format(
+                str(batch_i).zfill(6), 
+                loss.item(), 
+                loss_l2.item(), loss_l1.item(), 
+                reg_loss_l1["hidden"].item(), reg_loss_l2["hidden"].item())
+            )
 
             cce_metrics = {"l1-l2": loss_l2.item(), "l2-l1": loss_l1.item()}
             write_to_tensorboard("CCE", cce_metrics, training=True, step=batch_i, writer=writer)
 
-            bce_metrics = {"hddn": reg_losses["hidden"].item()}
+            bce_metrics = {"hidden l1": reg_loss_l1["hidden"].item(), "hidden l2": reg_loss_l2["hidden"].item()}
             write_to_tensorboard("BCE", bce_metrics, training=True, step=batch_i, writer=writer)
         
         # Write validation losses/metrics to stdout and tensorboard
@@ -191,7 +196,7 @@ def valid(model, dataloader, config):
                 sents_l2, sents_no_eos_l2, lengths_l2
             )
             
-            loss, loss_l2, loss_l1, reg_losses = loss_fn(
+            loss, loss_l2, loss_l1, reg_loss_l1, reg_loss_l2 = loss_fn(
                 sents_l1[:, 1:], sents_l2[:, 1:],
                 dec_out_l1, dec_out_l2, 
                 ignore_index_l1=dataloader.dataset.tokenizer_l1.pad_token_id,
@@ -218,8 +223,8 @@ def valid(model, dataloader, config):
             metrics_dict["l2-l1"]["bleu"][-1] = sum(metrics_dict["l2-l1"]["bleu"][-1]) \
                                                     / len(metrics_dict["l2-l1"]["bleu"][-1])
 
-            metrics_dict["l1-l2"]["em"].append(exact_match(preds_l2[:, 0:-1], sents_l2[:, 1:-1], ignore_index=dataloader.dataset.tokenizer_l2.pad_token_id))
-            metrics_dict["l2-l1"]["em"].append(exact_match(preds_l1[:, 0:-1], sents_l1[:, 1:-1], ignore_index=dataloader.dataset.tokenizer_l1.pad_token_id))
+            metrics_dict["l1-l2"]["em"].append(exact_match(sents_l2[:, 1:-1], preds_l2[:, 0:-1], ignore_index=dataloader.dataset.tokenizer_l2.pad_token_id))
+            metrics_dict["l2-l1"]["em"].append(exact_match(sents_l1[:, 1:-1], preds_l1[:, 0:-1], ignore_index=dataloader.dataset.tokenizer_l1.pad_token_id))
 
     if is_training:
         model.train()
