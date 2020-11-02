@@ -8,15 +8,20 @@ maxlen: &maxlen 50
 
 log_frequency: 100
 val_frequency: 1000
-checkpoint_frequency: 50000
+checkpoint_frequency: 5000
 
 n_valid: 10000
-n_train_steps: 2000
+n_train_steps: 100000
 n_valid_steps: 100
 do_full_eval: False
 
 adam:
-    lr: 0.00015
+    lr: 0.0001
+    weight_decay: 0.01
+
+rmsp:
+    lr: 0.00005
+    weight_decay: 0.00
 
 regularization: &regularization
     type:

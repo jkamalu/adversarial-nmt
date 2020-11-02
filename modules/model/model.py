@@ -58,7 +58,7 @@ class BidirectionalTranslator(nn.Module):
         dec_out_l2 = self.decoder_l2(sents_no_eos_l2, enc_out_l1, lengths_l1)
 
         # L2 to L1
-        if self.n_encoders == 2:
+        if self.n_encoders == 1:
             enc_out_l2 = self.encoder_l1(sents_l2, lengths=lengths_l2)
         else:
             enc_out_l2 = self.encoder_l2(sents_l2, lengths=lengths_l2)
