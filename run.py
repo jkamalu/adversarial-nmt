@@ -3,7 +3,7 @@ import sys
 import logging
 from argparse import ArgumentParser
 
-from transformers import RobertaTokenizer, CamembertTokenizer
+from transformers import RobertaTokenizer, CamembertTokenizer, XLMRobertaTokenizer
 
 import torch; torch.autograd.set_detect_anomaly(True)
 import torch.multiprocessing as mp
@@ -17,7 +17,8 @@ from modules.model import BidirectionalTranslator
 
 TOKENIZERS = {
     "en": lambda: RobertaTokenizer.from_pretrained('roberta-base'),
-    "fr": lambda: CamembertTokenizer.from_pretrained('camembert-base')
+    "fr": lambda: CamembertTokenizer.from_pretrained('camembert-base'),
+    "multi": lambda: XLMRobertaTokenizer.from_pretrained('xlm-roberta-base')
 }
 
 DATA = {
@@ -85,6 +86,7 @@ if __name__ == "__main__":
     parser.add_argument("--experiment", "-e", type=str, default=path_to_config("bert-vanilla-hidden.yml"))
     parser.add_argument("--mode", "-m", type=str, choices=["train", "eval"], default="train")
     parser.add_argument("--dist", "-d", action="store_true")
+    parser.add_argument("--shared_encoder", "-s", action="store_true")
     
     args = parser.parse_args()
     

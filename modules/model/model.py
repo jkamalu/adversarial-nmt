@@ -15,16 +15,24 @@ class BidirectionalTranslator(nn.Module):
         embeddings. We tie the embedding layer and decoder output layer.
         """
         super().__init__()
-        
+
+        # Set number of encoders
+        if config["shared_encoder"]:
+            self.n_encoders = 1
+        else:
+            self.n_encoders = 2
+
         # Encoders
         enc = config["encoder"]
         self.encoder_l1 = Encoder.init_from_config("bert", config["encoder_kwargs"]["bert"], config["l1"])
-        self.encoder_l2 = Encoder.init_from_config("bert", config["encoder_kwargs"]["bert"], config["l2"])
+        if self.n_encoders == 2:
+            self.encoder_l2 = Encoder.init_from_config("bert", config["encoder_kwargs"]["bert"], config["l2"])
         
         # Embeddings
         if enc == "bert":
             embeddings_l1 = self.encoder_l1.model.get_input_embeddings()
-            embeddings_l2 = self.encoder_l2.model.get_input_embeddings()
+            if self.n_encoders == 2:
+                embeddings_l2 = self.encoder_l2.model.get_input_embeddings()
         else:
             raise NotImplementedError
             
@@ -45,7 +53,10 @@ class BidirectionalTranslator(nn.Module):
         dec_out_l2 = self.decoder_l2(sents_no_eos_l2, enc_out_l1, lengths_l1)
 
         # L2 to L1
-        enc_out_l2 = self.encoder_l2(sents_l2, lengths=lengths_l2)
+        if self.n_encoders == 2:
+            enc_out_l2 = self.encoder_l1(sents_l2, lengths=lengths_l2)
+        else:
+            enc_out_l2 = self.encoder_l2(sents_l2, lengths=lengths_l2)
         dec_out_l1 = self.decoder_l1(sents_no_eos_l1, enc_out_l2, lengths_l2)
         
         return sents_l1, sents_l2, enc_out_l1, enc_out_l2, dec_out_l1, dec_out_l2
