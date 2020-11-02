@@ -33,7 +33,7 @@ def datasets(config):
     data_path = path_to_data("europarl-v7")
 
     if config["shared_encoder"]:
-        tokenizer_l1 = TOKENIZERS[config["multi"]]()
+        tokenizer_l1 = TOKENIZERS["multi"]()
         tokenizer_l2 = tokenizer_l1
     else:
         tokenizer_l1 = TOKENIZERS[config["l1"]]()

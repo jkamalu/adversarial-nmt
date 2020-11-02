@@ -2,7 +2,7 @@ l1: fr
 l2: en
 seed: 330
 
-batch_size: &batch_size 32
+batch_size: &batch_size 16
 minlen: &minlen 3
 maxlen: &maxlen 50
 

@@ -80,7 +80,8 @@ class EuroparlDataset(IterableDataset):
 
     @classmethod
     def to_hdf5(cls, dirname, fname_l1, fname_l2, tokenizer_l1, tokenizer_l2, min_length, max_length, overwrite=False):
-        
+
+        #TODO: Incorporate model in filename to account for different tokenizers.
         basename = "{}-{}.min{}_max{}.hdf5".format(
             fname_l1.split(".")[-1],
             fname_l2.split(".")[-1],
