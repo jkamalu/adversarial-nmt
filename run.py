@@ -4,7 +4,7 @@ import logging
 from itertools import chain
 from argparse import ArgumentParser
 
-from transformers import RobertaTokenizer, CamembertTokenizer, XLMRobertaTokenizer
+from transformers import RobertaTokenizer, CamembertTokenizer, BertTokenizer
 
 import torch; torch.autograd.set_detect_anomaly(True)
 import torch.multiprocessing as mp
@@ -21,7 +21,7 @@ from modules.model import BidirectionalTranslator
 TOKENIZERS = {
     "en": lambda: RobertaTokenizer.from_pretrained('roberta-base'),
     "fr": lambda: CamembertTokenizer.from_pretrained('camembert-base'),
-    "multi": lambda: XLMRobertaTokenizer.from_pretrained('xlm-roberta-base')
+    "multi": lambda: BertTokenizer.from_pretrained('bert-base-multilingual-cased')
 }
 
 DATA = {
@@ -31,9 +31,13 @@ DATA = {
 
 def datasets(config):
     data_path = path_to_data("europarl-v7")
-    
-    tokenizer_l1 = TOKENIZERS[config["l1"]]()
-    tokenizer_l2 = TOKENIZERS[config["l2"]]()
+
+    if config["shared_encoder"]:
+        tokenizer_l1 = TOKENIZERS[config["multi"]]()
+        tokenizer_l2 = tokenizer_l1
+    else:
+        tokenizer_l1 = TOKENIZERS[config["l1"]]()
+        tokenizer_l2 = TOKENIZERS[config["l2"]]()
     
     pair = frozenset([config["l1"], config["l2"]])
     

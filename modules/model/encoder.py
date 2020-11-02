@@ -10,13 +10,13 @@ import torch.nn as nn
 
 from transformers import (RobertaConfig, RobertaModel, RobertaTokenizer,
                           CamembertConfig, CamembertModel, CamembertTokenizer,
-                          XLMRobertaConfig, XLMRobertaModel, XLMRobertaTokenizer)
+                          BertConfig, BertModel, BertTokenizer)
 
 
 MODEL_CLASSES = {
     'en': (RobertaConfig, RobertaModel, "roberta-base"),
     'fr': (CamembertConfig, CamembertModel, "camembert-base"),
-    'multi': (XLMRobertaConfig, XLMRobertaModel, "xlm-roberta-base")
+    'multi': (BertConfig, BertModel, "bert-base-multilingual-cased")
 }
 
 
