@@ -2,10 +2,13 @@ import os
 import math
 import datetime
 import logging
+from itertools import chain
 
 import pyaml
 
 import torch
+from torch.nn import ModuleDict
+from torch.optim import Adam, SGD, RMSprop
 
 
 def path_to_config(name):
@@ -47,6 +50,25 @@ def load_config(path):
         
     return config
 
+def gen_parameters(model):
+    return chain.from_iterable(
+        map(
+            lambda x: x.parameters(), 
+            filter(
+                lambda x: type(x) != ModuleDict, 
+                model.children()
+            )
+        )
+    )
+
+def dis_parameters(model):
+    return model.discriminators.parameters()
+
+def build_optimizers(model, gen_opt_kwargs, dis_opt_kwargs):
+    gen_optimizer = Adam(gen_parameters(model), **gen_opt_kwargs)
+    dis_optimizer = RMSprop(dis_parameters(model), **dis_opt_kwargs)
+    return gen_optimizer, dis_optimizer
+
 def save_checkpoint(model, gen_optimizer, dis_optimizer, step, experiment):
     ckpt = "{0}.pt".format(str(step).zfill(6))
     
@@ -57,13 +79,16 @@ def save_checkpoint(model, gen_optimizer, dis_optimizer, step, experiment):
         "step": step,
     }, os.path.join(path_to_output(experiment), "checkpoints", ckpt))
 
-def load_checkpoint(model, gen_optimizer, dis_optimizer, step, experiment):
+def load_checkpoint(model, gen_opt_kwargs, dis_opt_kwargs, step, experiment):
     ckpt = "{0}.pt".format(str(step).zfill(6))
     state_dict = torch.load(os.path.join(path_to_output(experiment), "checkpoints", ckpt))
     
     model.load_state_dict(state_dict["model_state_dict"])
+    
+    gen_optimizer, dis_optimizer = build_optimizers(model, gen_opt_kwargs, dis_opt_kwargs)
+    
+    gen_optimizer.load_state_dict(state_dict["gen_optimizer_state_dict"]); print("gen opt")    
     dis_optimizer.load_state_dict(state_dict["dis_optimizer_state_dict"]); print("dis opt")
-    gen_optimizer.load_state_dict(state_dict["gen_optimizer_state_dict"]); print("gen opt")
 
     for state in gen_optimizer.state.values():
         for k, v in state.items():

@@ -23,8 +23,6 @@ def switch_trainable(model, step):
     
 def train(model, gen_optimizer, dis_optimizer, dataset_train, dataset_valid, batch_i, config):    
     
-    model.cuda()
-    
     dataloader_train = DataLoader(
         dataset_train, 
         batch_size=config["batch_size"], 
@@ -138,8 +136,6 @@ def train(model, gen_optimizer, dis_optimizer, dataset_train, dataset_valid, bat
 
 def evaluate(model, dataset, config):
     
-    model.cuda()
-    
     dataloader = DataLoader(
         dataset, 
         batch_size=config["batch_size"], 
@@ -204,10 +200,10 @@ def valid(model, dataloader, config):
                 text_real_l1 = dataloader.dataset.tokenizer_l1.decode(sents_l1[idx, 1:-1].tolist())
                 text_pred_l1 = dataloader.dataset.tokenizer_l1.decode(preds_l1[idx, 0:-1].tolist())
                 metrics_dict["l2-l1"]["bleu"][-1].append(sentence_bleu([text_real_l1], text_pred_l1))
-            metrics_dict["l1-l2"]["bleu"][-1] = sum(metrics_dict["l1-l2"]["bleu"][-1]) \
-                                                    / len(metrics_dict["l1-l2"]["bleu"][-1])
-            metrics_dict["l2-l1"]["bleu"][-1] = sum(metrics_dict["l2-l1"]["bleu"][-1]) \
-                                                    / len(metrics_dict["l2-l1"]["bleu"][-1])
+            metrics_dict["l1-l2"]["bleu"][-1] = sum(metrics_dict["l1-l2"]["bleu"][-1]) / \
+                                                len(metrics_dict["l1-l2"]["bleu"][-1])
+            metrics_dict["l2-l1"]["bleu"][-1] = sum(metrics_dict["l2-l1"]["bleu"][-1]) / \
+                                                len(metrics_dict["l2-l1"]["bleu"][-1])
 
             metrics_dict["l1-l2"]["em"].append(exact_match(sents_l2[:, 1:-1], preds_l2[:, 0:-1], ignore_index=dataloader.dataset.tokenizer_l2.pad_token_id))
             metrics_dict["l2-l1"]["em"].append(exact_match(sents_l1[:, 1:-1], preds_l1[:, 0:-1], ignore_index=dataloader.dataset.tokenizer_l1.pad_token_id))

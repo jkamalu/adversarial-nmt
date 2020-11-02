@@ -1,20 +1,17 @@
 import os
 import sys
 import logging
-from itertools import chain
 from argparse import ArgumentParser
 
 from transformers import RobertaTokenizer, CamembertTokenizer
 
 import torch; torch.autograd.set_detect_anomaly(True)
 import torch.multiprocessing as mp
-from torch.nn import ModuleDict
 from torch.utils.data import Subset
-from torch.optim import Adam, SGD, RMSprop
 
 from modules.data import EuroparlDataset
 from modules.run import train, evaluate
-from modules.utils import load_config, path_to_data, path_to_config, load_checkpoint
+from modules.utils import load_config, path_to_data, path_to_config, load_checkpoint, build_optimizers
 from modules.model import BidirectionalTranslator
 
 
@@ -69,28 +66,13 @@ def main(args):
     dataset_train, dataset_valid = datasets(config)
     
     logging.info("creating model and optimizer")
-    model = BidirectionalTranslator(config)
-            
-    # split generator and discriminator parameters
-    gen_params = chain.from_iterable(
-        map(
-            lambda x: x.parameters(), 
-            filter(
-                lambda x: type(x) != ModuleDict, 
-                model.children()
-            )
-        )
-    )
-    dis_params = model.discriminators.parameters()
-    
-    gen_optimizer = Adam(gen_params, **config["adam"])
-    dis_optimizer = RMSprop(dis_params, **config["rmsp"])
-    
+    model = BidirectionalTranslator(config).cuda()
+    gen_optimizer, dis_optimizer = build_optimizers(model, config["adam"], config["rmsp"])
     step = 0
     
     if args.iter is not None:
         logging.info("loading model and optimizer parameters")
-        ckpt = load_checkpoint(model, gen_optimizer, dis_optimizer, args.iter, config["experiment"])
+        ckpt = load_checkpoint(model, config["adam"], config["rmsp"], args.iter, config["experiment"])
         model, gen_optimizer, dis_optimizer, step = ckpt
 
     logging.info("starting the {} routine from step {}.".format(config["mode"], step))

@@ -55,7 +55,8 @@ def accuracy(real_pred_ys):
         reg_accuracies = defaultdict(lambda: torch.tensor(0.0))
         for regularization in real_pred_ys:
             real_y, pred_y = real_pred_ys[regularization]
-            pred_y = (torch.sigmoid(pred_y) > 0.5).float()
+            pred_y = (torch.sigmoid(pred_y) > 0.5)
+            real_y = (torch.sigmoid(real_y) > 0.5)
             reg_accuracies[regularization] = torch.mean(torch.eq(pred_y, real_y).float())
         return reg_accuracies
 
