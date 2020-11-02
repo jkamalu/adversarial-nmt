@@ -27,34 +27,37 @@ def loss_fn(real_l1, real_l2, pred_l1, pred_l2, real_pred_l1={}, real_pred_l2={}
     cce_l2 = torch.nn.CrossEntropyLoss(ignore_index=ignore_index_l2)
     bce = torch.nn.BCEWithLogitsLoss()
     
+    agg = 0
+    
     loss_l1 = cce_l1(pred_l1.transpose(1,2), real_l1)
+    agg = agg + loss_l1
     
     loss_l2 = cce_l2(pred_l2.transpose(1,2), real_l2)
+    agg = agg + loss_l2
     
     bce_loss_l1 = defaultdict(lambda: torch.tensor(0.0))
     for regularization in real_pred_l1:
         real_l1, pred_l1 = real_pred_l1[regularization]
         bce_loss_l1[regularization] = bce(pred_l1, real_l1)
+        agg = agg + bce_loss_l1[regularization]
 
     bce_loss_l2 = defaultdict(lambda: torch.tensor(0.0))
     for regularization in real_pred_l2:
         real_l2, pred_l2 = real_pred_l2[regularization]
         bce_loss_l2[regularization] = bce(pred_l2, real_l2)
-       
-    agg = loss_l2 + loss_l1 + \
-          torch.sum(torch.tensor(list(bce_loss_l1.values()))) + \
-          torch.sum(torch.tensor(list(bce_loss_l2.values())))
+        agg = agg + bce_loss_l2[regularization]
 
     return agg, loss_l2, loss_l1, bce_loss_l1, bce_loss_l2
 
 
 def accuracy(real_pred_ys):
-    reg_accuracies = defaultdict(lambda: torch.tensor(0.0))
-    for regularization in real_pred_ys:
-        real_y, pred_y = real_pred_ys[regularization]
-        print(real_y[0])
-        print(pred_y[0])
-    return reg_accuracies
+    with torch.no_grad():
+        reg_accuracies = defaultdict(lambda: torch.tensor(0.0))
+        for regularization in real_pred_ys:
+            real_y, pred_y = real_pred_ys[regularization]
+            pred_y = (torch.sigmoid(pred_y) > 0.5).float()
+            reg_accuracies[regularization] = torch.mean(torch.eq(pred_y, real_y).float())
+        return reg_accuracies
 
 
 def exact_match(real, pred, ignore_index=1):

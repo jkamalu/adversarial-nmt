@@ -21,7 +21,8 @@ class Discriminator(nn.Module):
         self.output_dim = discriminator_kwargs["output_dim"]
 
         self.ff_1 = nn.Linear(self.hidden_dim, self.hidden_dim)
-        self.ff_2 = nn.Linear(self.hidden_dim, self.output_dim)
+        self.ff_2 = nn.Linear(self.hidden_dim, self.hidden_dim)
+        self.ff_3 = nn.Linear(self.hidden_dim, self.output_dim)
 
     def forward(self, x):
         """
@@ -31,5 +32,5 @@ class Discriminator(nn.Module):
             o: (batch size, hidden_dim)
         """
         x = torch.sum(x, dim=1)
-        o = self.ff_2(F.relu(self.ff_1(x)))
+        o = self.ff_3(F.leaky_relu(self.ff_2(F.leaky_relu(self.ff_1(x)))))
         return o

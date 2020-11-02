@@ -1,17 +1,20 @@
 import os
 import sys
 import logging
+from itertools import chain
 from argparse import ArgumentParser
 
 from transformers import RobertaTokenizer, CamembertTokenizer
 
 import torch; torch.autograd.set_detect_anomaly(True)
 import torch.multiprocessing as mp
+from torch.nn import ModuleDict
 from torch.utils.data import Subset
+from torch.optim import Adam, SGD, RMSprop
 
 from modules.data import EuroparlDataset
 from modules.run import train, evaluate
-from modules.utils import load_config, path_to_data, path_to_config
+from modules.utils import load_config, path_to_data, path_to_config, load_checkpoint
 from modules.model import BidirectionalTranslator
 
 
@@ -65,16 +68,37 @@ def main(args):
     logging.info("creating europarl-v7 datasets.")    
     dataset_train, dataset_valid = datasets(config)
     
-    logging.info("creating bidirectional translator and optimizer")
+    logging.info("creating model and optimizer")
     model = BidirectionalTranslator(config)
-    optimizer = Adam(model.parameters(), **config["adam"])
+            
+    # split generator and discriminator parameters
+    gen_params = chain.from_iterable(
+        map(
+            lambda x: x.parameters(), 
+            filter(
+                lambda x: type(x) != ModuleDict, 
+                model.children()
+            )
+        )
+    )
+    dis_params = model.discriminators.parameters()
     
-    logging.info("starting the {} routine.".format(config["mode"]))
+    gen_optimizer = Adam(gen_params, **config["adam"])
+    dis_optimizer = RMSprop(dis_params, **config["rmsp"])
+    
+    step = 0
+    
+    if args.iter is not None:
+        logging.info("loading model and optimizer parameters")
+        ckpt = load_checkpoint(model, gen_optimizer, dis_optimizer, args.iter, config["experiment"])
+        model, gen_optimizer, dis_optimizer, step = ckpt
+
+    logging.info("starting the {} routine from step {}.".format(config["mode"], step))
     if config["dist"]:
-        raise NotImplementedError("Must redesign data pipeline before distributed data parallel training is feasible.")
+        raise NotImplementedError
     else:
         if config["mode"] == "train":
-            train(model, optimizer, dataset_train, dataset_valid, config)
+            train(model, gen_optimizer, dis_optimizer, dataset_train, dataset_valid, step, config)
         else:
             evaluate(model, dataset_valid, config)
 
@@ -83,6 +107,7 @@ if __name__ == "__main__":
     parser = ArgumentParser()
     
     parser.add_argument("--experiment", "-e", type=str, default=path_to_config("bert-vanilla-hidden.yml"))
+    parser.add_argument("--iter", "-i", type=str, default=None)
     parser.add_argument("--mode", "-m", type=str, choices=["train", "eval"], default="train")
     parser.add_argument("--dist", "-d", action="store_true")
     
