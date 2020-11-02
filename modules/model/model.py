@@ -41,7 +41,10 @@ class BidirectionalTranslator(nn.Module):
         # Decoders
         dec = config["decoder"]
         self.decoder_l1 = Decoder.init_from_config(dec, config["decoder_kwargs"][dec], embeddings_l1)
-        self.decoder_l2 = Decoder.init_from_config(dec, config["decoder_kwargs"][dec], embeddings_l2)
+        if self.n_encoders == 1:
+            self.decoder_l2 = Decoder.init_from_config(dec, config["decoder_kwargs"][dec], embeddings_l1)
+        else:
+            self.decoder_l2 = Decoder.init_from_config(dec, config["decoder_kwargs"][dec], embeddings_l2)
         
         # Discriminators
         self.discriminators = nn.ModuleDict({
