@@ -24,8 +24,10 @@ class BidirectionalTranslator(nn.Module):
 
         # Encoders
         enc = config["encoder"]
-        self.encoder_l1 = Encoder.init_from_config("bert", config["encoder_kwargs"]["bert"], config["l1"])
+        if self.n_encoders == 1:
+            self.encoder_l1 = Encoder.init_from_config("bert", config["encoder_kwargs"]["bert"], "multi")
         if self.n_encoders == 2:
+            self.encoder_l1 = Encoder.init_from_config("bert", config["encoder_kwargs"]["bert"], config["l1"])
             self.encoder_l2 = Encoder.init_from_config("bert", config["encoder_kwargs"]["bert"], config["l2"])
         
         # Embeddings

@@ -1,4 +1,5 @@
-l1: multi
+l1: fr
+l2: en
 seed: 330
 
 batch_size: &batch_size 32
