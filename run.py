@@ -88,7 +88,7 @@ def main(args):
 if __name__ == "__main__":
     parser = ArgumentParser()
     
-    parser.add_argument("--experiment", "-e", type=str, default=path_to_config("bert-vanilla-hidden.yml"))
+    parser.add_argument("--experiment", "-e", type=str, default=path_to_config("bert-vanilla-none.yml"))
     parser.add_argument("--iter", "-i", type=str, default=None)
     parser.add_argument("--mode", "-m", type=str, choices=["train", "eval"], default="train")
     parser.add_argument("--dist", "-d", action="store_true")
