@@ -1,8 +1,8 @@
-batch_size: &batch_size 32
+batch_size: &batch_size 16
 minlen: &minlen 2
 maxlen: &maxlen 50
 n_train: -1
-n_valid: 100
+n_valid: 1000
 
 regularization: &regularization
     type:
@@ -11,10 +11,10 @@ regularization: &regularization
 
 d_model: &d_model 768
 
-log_frequency: 100
-val_frequency: 1000
-checkpoint_frequency: 50000
-max_step_num: 100000
+log_frequency: 10000
+val_frequency: 10000
+checkpoint_frequency: 10000
+max_step_num: 150000
 
 adam:
     lr: 0.00015

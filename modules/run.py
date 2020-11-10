@@ -7,8 +7,10 @@ from torch.utils.tensorboard import SummaryWriter
 
 from modules.data import Collator
 from modules.model import Encoder, Discriminator, BidirectionalTranslator
-from modules.metrics import loss_fn, exact_match, sentence_bleu, write_to_tensorboard
+from modules.metrics import soft_loss_fn, loss_fn, exact_match, sentence_bleu, write_to_tensorboard
 from modules.utils import init_output_dirs
+
+import os
 
 
 def switch_trainable(model, step):    
@@ -23,7 +25,7 @@ def switch_trainable(model, step):
                     param.requires_grad = switch
 
 
-def save_checkpoint(model, optimizer, step, loss, ckpt_dir):
+def save_checkpoint(model, optimizer, step, ckpt_dir):
     ckpt = "{0}-{1:e}.pt".format(str(step).zfill(6), step)
     
     torch.save({
@@ -84,15 +86,15 @@ def train(model, dataset_train, dataset_valid, config):
 
         # Save weights and continue training
         if batch_i > 0 and batch_i % config["checkpoint_frequency"] == 0:
-            save_weights(model, optimizer, batch_i)
+            save_checkpoint(model, optimizer, batch_i, './saved_model_no_soft')
 
         # Save weights and terminate training
         if batch_i > 0 and batch_i >= config["max_step_num"]:
-            save_weights(model, optimizer, batch_i)
+            save_checkpoint(model, optimizer, batch_i,'./saved_model_no_soft')
             break
 
         # Unpack the batch, run the encoders, run the decoders
-        sents_en, sents_fr, enc_out_en, enc_out_fr, dec_out_en, dec_out_fr = model(
+        sents_en, sents_fr, enc_out_en, enc_out_fr, dec_out_en, dec_out_fr, en_fr_enc_w, fr_en_enc_w = model(
             sents_en, sents_no_eos_en, lengths_en,
             sents_fr, sents_no_eos_fr, lengths_fr
         )
@@ -110,28 +112,41 @@ def train(model, dataset_train, dataset_valid, config):
             y_hddn_pred_fr = model.discriminate("hidden", enc_out_fr)
             y_hddn_pred = torch.cat([y_hddn_pred_en, y_hddn_pred_fr])
             real_pred_ys["hidden"] = y_real, y_hddn_pred
-
+        
+        '''
         loss, loss_en2fr, loss_fr2en, reg_losses = loss_fn(
             sents_en[:, 1:], sents_fr[:, 1:],
             dec_out_en, dec_out_fr, 
             real_pred_ys,
             ignore_index=1
         )
-                
+        '''
+
+        loss, loss_en2fr, loss_fr2en, soft_param_share_loss = soft_loss_fn(
+            sents_en[:, 1:], sents_fr[:, 1:],
+            dec_out_en, dec_out_fr, 
+            en_fr_enc_w,
+            fr_en_enc_w,
+            ignore_index=1
+        )
+
         # Optimize trainable parameters
         loss.backward()
         optimizer.step()
 
         # Write training losses/metrics to stdout and tensorboard
         if batch_i > 0 and batch_i % config["log_frequency"] == 0:
-            
+            '''
             print("Step {}: loss {}, en-fr {}, fr-en {}, hddn {}".format(
                 str(batch_i).zfill(6), loss.item(), loss_en2fr.item(), loss_fr2en.item(), reg_losses["hidden"].item()))
+            '''
+            print("Step {}: loss {}, en-fr {}, fr-en {}, hddn {}".format(
+                str(batch_i).zfill(6), loss.item(), loss_en2fr.item(), loss_fr2en.item(), soft_param_share_loss.item()))
 
             cce_metrics = {"en-fr": loss_en2fr.item(), "fr-en": loss_fr2en.item()}
             write_to_tensorboard("CCE", cce_metrics, training=True, step=batch_i, writer=writer)
 
-            bce_metrics = {"hddn": reg_losses["hidden"].item()}
+            bce_metrics = {"soft": soft_param_share_loss.item()}
             write_to_tensorboard("BCE", bce_metrics, training=True, step=batch_i, writer=writer)
         
         # Write validation losses/metrics to stdout and tensorboard
@@ -185,14 +200,24 @@ def valid(model, dataloader, config):
             sents_en, sents_no_eos_en, lengths_en = map(lambda t: t.cuda(), batch_en)
             sents_fr, sents_no_eos_fr, lengths_fr = map(lambda t: t.cuda(), batch_fr)
 
-            sents_en, sents_fr, enc_out_en, enc_out_fr, dec_out_en, dec_out_fr = model(
+            sents_en, sents_fr, enc_out_en, enc_out_fr, dec_out_en, dec_out_fr, en_fr_enc_w, fr_en_enc_w = model(
                 sents_en, sents_no_eos_en, lengths_en,
                 sents_fr, sents_no_eos_fr, lengths_fr
             )
             
+            '''
             loss_all, loss_fr, loss_en, loss_reg = loss_fn(
                 sents_en[:, 1:], sents_fr[:, 1:],
                 dec_out_en, dec_out_fr,
+                ignore_index=1
+            )
+            '''
+
+            loss_all, loss_fr, loss_en, soft_param_share_loss = soft_loss_fn(
+                sents_en[:, 1:], sents_fr[:, 1:],
+                dec_out_en, dec_out_fr, 
+                en_fr_enc_w,
+                fr_en_enc_w,
                 ignore_index=1
             )
 

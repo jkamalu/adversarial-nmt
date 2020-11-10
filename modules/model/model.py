@@ -48,7 +48,13 @@ class BidirectionalTranslator(nn.Module):
         enc_out_fr = self.encoder_fr(sents_fr, lengths=lengths_fr)
         dec_out_en = self.decoder_en(sents_no_eos_en, enc_out_fr, lengths_fr)
         
-        return sents_en, sents_fr, enc_out_en, enc_out_fr, dec_out_en, dec_out_fr
+        # English to French encoder weights
+        en_fr_enc_w = self.encoder_en.state_dict()
+
+        # French to English encoder weights
+        fr_en_enc_w = self.encoder_fr.state_dict()
+
+        return sents_en, sents_fr, enc_out_en, enc_out_fr, dec_out_en, dec_out_fr, en_fr_enc_w, fr_en_enc_w
 
     def discriminate(self, regularization, enc_out):
         return self.discriminators[regularization](enc_out)

@@ -10,3 +10,6 @@ connect_to_gcp.sh
 *.pyc
 __pycache__
 modules/lib
+*.job*
+saved_model*
+experiments
