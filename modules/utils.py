@@ -50,29 +50,42 @@ def load_config(path):
 def save_checkpoint(model, gen_optimizer, dis_optimizer, step, experiment):
     ckpt = "{0}.pt".format(str(step).zfill(6))
     
-    torch.save({
-        "model_state_dict": model.state_dict(),
-        "gen_optimizer_state_dict": gen_optimizer.state_dict(),
-        "dis_optimizer_state_dict": dis_optimizer.state_dict(),
-        "step": step,
-    }, os.path.join(path_to_output(experiment), "checkpoints", ckpt))
+    if dis_optimizer == None:
+        torch.save({
+            "model_state_dict": model.state_dict(),
+            "gen_optimizer_state_dict": gen_optimizer.state_dict(),
+            "step": step,
+        }, os.path.join(path_to_output(experiment), "checkpoints", ckpt))
+    else:
+        torch.save({
+            "model_state_dict": model.state_dict(),
+            "gen_optimizer_state_dict": gen_optimizer.state_dict(),
+            "dis_optimizer_state_dict": dis_optimizer.state_dict(),
+            "step": step,
+        }, os.path.join(path_to_output(experiment), "checkpoints", ckpt))
 
 def load_checkpoint(model, gen_optimizer, dis_optimizer, step, experiment):
     ckpt = "{0}.pt".format(str(step).zfill(6))
     state_dict = torch.load(os.path.join(path_to_output(experiment), "checkpoints", ckpt))
     
     model.load_state_dict(state_dict["model_state_dict"])
-    dis_optimizer.load_state_dict(state_dict["dis_optimizer_state_dict"]); print("dis opt")
     gen_optimizer.load_state_dict(state_dict["gen_optimizer_state_dict"]); print("gen opt")
-
+    
     for state in gen_optimizer.state.values():
         for k, v in state.items():
             if torch.is_tensor(v):
                 state[k] = v.cuda()
+
+    if dis_optimizer is not None:
+        dis_optimizer.load_state_dict(state_dict["dis_optimizer_state_dict"]); print("dis opt")
+
+        for state in dis_optimizer.state.values():
+            for k, v in state.items():
+                if torch.is_tensor(v):
+                    state[k] = v.cuda()
+
+
                 
-    for state in dis_optimizer.state.values():
-        for k, v in state.items():
-            if torch.is_tensor(v):
-                state[k] = v.cuda()
+
 
     return model, gen_optimizer, dis_optimizer, state_dict["step"]

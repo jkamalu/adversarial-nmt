@@ -21,14 +21,21 @@ class BidirectionalTranslator(nn.Module):
             self.n_encoders = 1
         else:
             self.n_encoders = 2
+        
+        # Set bert languages
+        if config["m_bert"]:
+            self.l1 = "multi"
+            self.l2 = "multi"
+        else:
+            self.l1 = config["l1"]
+            self.l2 = config["l2"]
 
         # Encoders
         enc = config["encoder"]
-        if self.n_encoders == 1:
-            self.encoder_l1 = Encoder.init_from_config("bert", config["encoder_kwargs"]["bert"], "multi")
+
+        self.encoder_l1 = Encoder.init_from_config("bert", config["encoder_kwargs"]["bert"], self.l1)
         if self.n_encoders == 2:
-            self.encoder_l1 = Encoder.init_from_config("bert", config["encoder_kwargs"]["bert"], config["l1"])
-            self.encoder_l2 = Encoder.init_from_config("bert", config["encoder_kwargs"]["bert"], config["l2"])
+            self.encoder_l2 = Encoder.init_from_config("bert", config["encoder_kwargs"]["bert"], self.l2)
         
         # Embeddings
         if enc == "bert":

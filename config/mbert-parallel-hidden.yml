@@ -15,7 +15,7 @@ n_train_steps: 150000
 n_valid_steps: 1000
 do_full_eval: False
 
-shared_encoder: True
+shared_encoder: False
 m_bert: True
 
 adam:
@@ -28,7 +28,8 @@ rmsp:
 
 regularization: &regularization
     type:
-        -
+        - hidden
+    n_affine: 0
 
 d_model: &d_model 768
 

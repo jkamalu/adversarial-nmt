@@ -28,7 +28,8 @@ rmsp:
 
 regularization: &regularization
     type:
-        -
+        - hidden
+    n_affine: 0
 
 d_model: &d_model 768
 

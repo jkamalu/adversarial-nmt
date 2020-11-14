@@ -86,10 +86,16 @@ def main(args):
             )
         )
     )
-    dis_params = model.discriminators.parameters()
+    
+    if "hidden" in config["regularization"]["type"]:
+        dis_params = model.discriminators.parameters()
     
     gen_optimizer = Adam(gen_params, **config["adam"])
-    dis_optimizer = RMSprop(dis_params, **config["rmsp"])
+    
+    if "hidden" in config["regularization"]["type"]:
+        dis_optimizer = RMSprop(dis_params, **config["rmsp"])
+    else:
+        dis_optimizer = None
     
     step = 0
     
@@ -115,8 +121,7 @@ if __name__ == "__main__":
     parser.add_argument("--iter", "-i", type=str, default=None)
     parser.add_argument("--mode", "-m", type=str, choices=["train", "eval"], default="train")
     parser.add_argument("--dist", "-d", action="store_true")
-    parser.add_argument("--shared_encoder", "-s", action="store_true")
-    
+
     args = parser.parse_args()
     
     main(args)
