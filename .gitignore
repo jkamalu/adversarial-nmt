@@ -5,6 +5,7 @@ data
 experiments
 europarl-v7
 glove_dir
+config/debug.yml
 connect_to_gcp.sh
 *.ipynb
 .ipynb_checkpoints

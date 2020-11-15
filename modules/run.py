@@ -9,26 +9,32 @@ from modules.model import Encoder, Discriminator, BidirectionalTranslator
 from modules.metrics import loss_fn, accuracy, exact_match, sentence_bleu, write_to_tensorboard
 from modules.utils import init_output_dirs, save_checkpoint
 
+
 def switch(step, config):
     """
     Return False if training discriminator, True otherwise
     """
+    # are we using adversarial regularization?
     if len(config["regularization"]["type"]) == 0:
         return True
-    if step % 2 == 0 and step % 100 >= config["discriminator_kwargs"]["warmup"]:
+    # are we performing a generator update?
+    elif step % 2 == 0 and step % 100 >= config["discriminator_kwargs"]["warmup"]:
         return True
-    return False
+    # we are performing a discriminator update.
+    else:
+        return False
 
-def switch_trainable(model, step, config):
-    switch_ = switch(step, config)
-    if len(model.discriminators) > 0:
-        for module in model.children():
-            if type(module) == ModuleDict:
-                for param in module.parameters():
-                    param.requires_grad = not switch_
-            else:
-                for param in module.parameters():
-                    param.requires_grad = switch_
+
+def switch_trainable(model, switch_):
+    if switch_:
+        model.discriminators.eval()
+        for key in model.generator:
+            model.generator[key].train()
+    else:
+        model.discriminators.train()
+        for key in model.generator:
+            model.generator[key].eval()
+
 
 def train(model, gen_optimizer, dis_optimizer, dataset_train, dataset_valid, batch_i, config):
     model.train()
@@ -38,7 +44,8 @@ def train(model, gen_optimizer, dis_optimizer, dataset_train, dataset_valid, bat
         batch_size=config["batch_size"], 
         shuffle=True,
         pin_memory=True,
-        num_workers=4
+        num_workers=2,
+        drop_last=True
     )
 
     dataloader_valid = DataLoader(
@@ -46,7 +53,8 @@ def train(model, gen_optimizer, dis_optimizer, dataset_train, dataset_valid, bat
         batch_size=config["batch_size"], 
         shuffle=True, 
         pin_memory=True,
-        num_workers=4
+        num_workers=2,
+        drop_last=True
     )
 
     writer = SummaryWriter(config["runs_dir"])
@@ -54,17 +62,21 @@ def train(model, gen_optimizer, dis_optimizer, dataset_train, dataset_valid, bat
     batch_0 = batch_i
     for batch in dataloader_train:
 
+        switch_ = switch(batch_i, config)
+
         # Unpack the batch and move to device
         batch_l1, batch_l2 = batch
         sents_l1, sents_no_eos_l1, lengths_l1 = map(lambda t: t.cuda(), batch_l1)
         sents_l2, sents_no_eos_l2, lengths_l2 = map(lambda t: t.cuda(), batch_l2)
 
         # Clear optimizer
-        gen_optimizer.zero_grad()
-        dis_optimizer.zero_grad()
+        if switch_:
+            gen_optimizer.zero_grad()
+        else:
+            dis_optimizer.zero_grad()
 
         # Alternate trainable for encoder and discriminator parameters
-        # switch_trainable(model, batch_i, config)
+        switch_trainable(model, switch_)
 
         # Unpack the batch, run the encoders, run the decoders
         sents_l1, sents_l2, enc_out_l1, enc_out_l2, dec_out_l1, dec_out_l2 = model(
@@ -75,7 +87,6 @@ def train(model, gen_optimizer, dis_optimizer, dataset_train, dataset_valid, bat
         # Initial default values for regularization 
         real_pred_l1 = {}
         real_pred_l2 = {}
-        switch_ = switch(batch_i, config)
         label = lambda x: 0.9 if x else 0.1
         real_l1 = torch.tensor([label(switch_)] * config["batch_size"]).unsqueeze(-1).cuda()
         real_l2 = torch.tensor([label(not switch_)] * config["batch_size"]).unsqueeze(-1).cuda() 
@@ -111,7 +122,7 @@ def train(model, gen_optimizer, dis_optimizer, dataset_train, dataset_valid, bat
 
             # Write training losses/metrics to stdout and tensorboard
             if batch_i % config["log_frequency"] == 0:
-                
+
                 print("Step {}: loss {:.4}\n\tcce-l1 {:.4}, cce-l2 {:.4}\n\t\tbce-hddn-l1 {:.4}, bce-hddn-l2 {:.4}\n\t\t\tacc-hddn-l1 {:.4}, acc-hddn-l2 {:.4}".format(
                         str(batch_i).zfill(6), 
                         loss.item(), 
@@ -147,18 +158,19 @@ def train(model, gen_optimizer, dis_optimizer, dataset_train, dataset_valid, bat
             if batch_i % config["checkpoint_frequency"] == 0:
                 save_checkpoint(model, gen_optimizer, dis_optimizer, batch_i, config["experiment"])
 
-def evaluate(model, dataset, config):
-    model.eval()
-    
+
+def evaluate(model, dataset, config):    
     dataloader = DataLoader(
-        dataset, 
+        dataset,
         batch_size=config["batch_size"], 
         shuffle=True, 
         pin_memory=True,
-        num_workers=4
+        num_workers=4,
+        drop_last=True
     )
 
     valid(model, dataloader, config)
+
 
 def valid(model, dataloader, config):
     is_training = model.training
