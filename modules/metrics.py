@@ -11,7 +11,7 @@ def write_to_tensorboard(base, metrics, training, step, writer):
 
     Example usage:
         writer = SummaryWriter("runs/regularize_hidden")
-        write_to_tensorboard("CCE", {'fr-en': 0.5, 'fr-en': 0.4}, True, 42, writer)
+        write_to_tensorboard("CCE", {'l1-l2': 0.5, 'l2-l1': 0.4}, True, 42, writer)
     """
 
     tag = "{}/{}".format(base, "train" if training else "val")
@@ -19,31 +19,66 @@ def write_to_tensorboard(base, metrics, training, step, writer):
     writer.add_scalars(tag, metrics, step)
 
 
-def loss_fn(real_en, real_fr, pred_en, pred_fr, real_pred_ys={}, ignore_index=1):
+def loss_fn(real_l1, real_l2, pred_l1, pred_l2, real_pred_l1={}, real_pred_l2={}, ignore_index_l1=1, ignore_index_l2=1):
     '''
     Adversarial Loss: standard loss with binary cross entropy on top of the discriminator outputs
     '''
-    cce_loss = torch.nn.CrossEntropyLoss(ignore_index=ignore_index)
+    cce_l1 = torch.nn.CrossEntropyLoss(ignore_index=ignore_index_l1)
+    cce_l2 = torch.nn.CrossEntropyLoss(ignore_index=ignore_index_l2)
+    bce = torch.nn.BCEWithLogitsLoss()
     
-    loss_en2fr = cce_loss(pred_fr.transpose(1,2), real_fr)
-    loss_fr2en = cce_loss(pred_en.transpose(1,2), real_en)
+    agg = 0
     
-    bce_loss = torch.nn.BCEWithLogitsLoss()
-    reg_losses = defaultdict(lambda: torch.tensor(0.0))
-    for regularization in real_pred_ys:
-        real_y, pred_y = real_pred_ys[regularization]
-        reg_losses[regularization] = bce_loss(pred_y, real_y)
+    loss_l1 = cce_l1(pred_l1.transpose(1,2), real_l1)
+    agg = agg + loss_l1
+    
+    loss_l2 = cce_l2(pred_l2.transpose(1,2), real_l2)
+    agg = agg + loss_l2
+    
+    bce_loss_l1 = defaultdict(lambda: torch.tensor(0.0))
+    for regularization in real_pred_l1:
+        real_l1, pred_l1 = real_pred_l1[regularization]
+        bce_loss_l1[regularization] = bce(pred_l1, real_l1)
+        agg = agg + bce_loss_l1[regularization]
 
-    return loss_en2fr + loss_fr2en + torch.sum(torch.tensor(list(reg_losses.values()))), loss_en2fr, loss_fr2en, reg_losses
+    bce_loss_l2 = defaultdict(lambda: torch.tensor(0.0))
+    for regularization in real_pred_l2:
+        real_l2, pred_l2 = real_pred_l2[regularization]
+        bce_loss_l2[regularization] = bce(pred_l2, real_l2)
+        agg = agg + bce_loss_l2[regularization]
 
-def soft_loss_fn(real_en, real_fr, pred_en, pred_fr, en_fr_enc_w, fr_en_enc_w, ignore_index=1):
+    return agg, loss_l2, loss_l1, bce_loss_l1, bce_loss_l2
+
+
+def accuracy(real_pred_ys):
+    with torch.no_grad():
+        reg_accuracies = defaultdict(lambda: torch.tensor(0.0))
+        for regularization in real_pred_ys:
+            real_y, pred_y = real_pred_ys[regularization]
+            pred_y = (torch.sigmoid(pred_y) > 0.5)
+            real_y = (real_y > 0.5)
+            try:
+                reg_accuracies[regularization] = torch.mean(torch.eq(pred_y, real_y).float())
+            except:
+                continue
+        return reg_accuracies
+
+def soft_loss_fn(real_l1, real_l2, pred_l1, pred_l2, en_fr_enc_w, fr_en_enc_w, ignore_index_l1=1, ignore_index_l2=1):
     '''
     Adversarial Loss: standard loss with binary cross entropy on top of the discriminator outputs
     '''
-    cce_loss = torch.nn.CrossEntropyLoss(ignore_index=ignore_index)
+    cce_l1 = torch.nn.CrossEntropyLoss(ignore_index=ignore_index_l1)
+    cce_l2 = torch.nn.CrossEntropyLoss(ignore_index=ignore_index_l2)
+    bce = torch.nn.BCEWithLogitsLoss()
     
-    loss_en2fr = cce_loss(pred_fr.transpose(1,2), real_fr)
-    loss_fr2en = cce_loss(pred_en.transpose(1,2), real_en)
+    agg = 0
+    
+    loss_l1 = cce_l1(pred_l1.transpose(1,2), real_l1)
+    agg = agg + loss_l1
+    
+    loss_l2 = cce_l2(pred_l2.transpose(1,2), real_l2)
+    agg = agg + loss_l2
+    
 
     soft_param_share_loss = 0
     count = 0
@@ -54,10 +89,11 @@ def soft_loss_fn(real_en, real_fr, pred_en, pred_fr, en_fr_enc_w, fr_en_enc_w, i
 
     soft_param_share_loss /= pow(10,3)
     soft_param_share_loss /= 2
+    agg = agg + soft_param_share_loss
 
-    return loss_en2fr + loss_fr2en, loss_en2fr, loss_fr2en, soft_param_share_loss
+    return agg, loss_l2, loss_l1, soft_param_share_loss
 
-def exact_match(pred, real, ignore_index=1):
+def exact_match(real, pred, ignore_index=1):
     '''
     Evaluate percent exact match between predictions and ground truth
     '''

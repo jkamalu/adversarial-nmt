@@ -18,20 +18,20 @@ class BidirectionalTranslator(nn.Module):
         
         # Encoders
         enc = config["encoder"]
-        self.encoder_en = Encoder.init_from_config("bert", config["encoder_kwargs"]["bert"], "english")
-        self.encoder_fr = Encoder.init_from_config("bert", config["encoder_kwargs"]["bert"], "french")
+        self.encoder_l1 = Encoder.init_from_config("bert", config["encoder_kwargs"]["bert"], config["l1"])
+        self.encoder_l2 = Encoder.init_from_config("bert", config["encoder_kwargs"]["bert"], config["l2"])
         
         # Embeddings
         if enc == "bert":
-            embeddings_en = self.encoder_en.model.get_input_embeddings()
-            embeddings_fr = self.encoder_fr.model.get_input_embeddings()
+            embeddings_l1 = self.encoder_l1.model.get_input_embeddings()
+            embeddings_l2 = self.encoder_l2.model.get_input_embeddings()
         else:
             raise NotImplementedError
             
         # Decoders
         dec = config["decoder"]
-        self.decoder_en = Decoder.init_from_config(dec, config["decoder_kwargs"][dec], embeddings_en)
-        self.decoder_fr = Decoder.init_from_config(dec, config["decoder_kwargs"][dec], embeddings_fr)
+        self.decoder_l1 = Decoder.init_from_config(dec, config["decoder_kwargs"][dec], embeddings_l1)
+        self.decoder_l2 = Decoder.init_from_config(dec, config["decoder_kwargs"][dec], embeddings_l2)
         
         # Discriminators
         self.discriminators = nn.ModuleDict({
@@ -39,22 +39,22 @@ class BidirectionalTranslator(nn.Module):
                 for regularization in config["regularization"]["type"]
         })
 
-    def forward(self, sents_en, sents_no_eos_en, lengths_en, sents_fr, sents_no_eos_fr, lengths_fr):
-        # English to French
-        enc_out_en = self.encoder_en(sents_en, lengths=lengths_en)
-        dec_out_fr = self.decoder_fr(sents_no_eos_fr, enc_out_en, lengths_en)
+    def forward(self, sents_l1, sents_no_eos_l1, lengths_l1, sents_l2, sents_no_eos_l2, lengths_l2):
+        # L1 to L2
+        enc_out_l1 = self.encoder_l1(sents_l1, lengths=lengths_l1)
+        dec_out_l2 = self.decoder_l2(sents_no_eos_l2, enc_out_l1, lengths_l1)
 
-        # French to English
-        enc_out_fr = self.encoder_fr(sents_fr, lengths=lengths_fr)
-        dec_out_en = self.decoder_en(sents_no_eos_en, enc_out_fr, lengths_fr)
+        # L2 to L1
+        enc_out_l2 = self.encoder_l2(sents_l2, lengths=lengths_l2)
+        dec_out_l1 = self.decoder_l1(sents_no_eos_l1, enc_out_l2, lengths_l2)
         
         # English to French encoder weights
-        en_fr_enc_w = self.encoder_en.state_dict()
+        en_fr_enc_w = self.encoder_l1.state_dict()
 
         # French to English encoder weights
-        fr_en_enc_w = self.encoder_fr.state_dict()
+        fr_en_enc_w = self.encoder_l2.state_dict()
 
-        return sents_en, sents_fr, enc_out_en, enc_out_fr, dec_out_en, dec_out_fr, en_fr_enc_w, fr_en_enc_w
+        return sents_l1, sents_l2, enc_out_l1, enc_out_l2, dec_out_l1, dec_out_l2, en_fr_enc_w, fr_en_enc_w
 
     def discriminate(self, regularization, enc_out):
         return self.discriminators[regularization](enc_out)

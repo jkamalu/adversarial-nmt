@@ -1,136 +1,150 @@
-__author__ = 'Richard Diehl Martinez, John Kamalu'
+__author__ = 'John Kamalu'
 
 import os
-import pickle
+import csv
+import tempfile
 import logging
+from functools import partial
 
-from tqdm import tqdm_notebook as tqdm
+import numpy as np
+
+import pandas
+
+import h5py
 
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import IterableDataset
 
+class EuroparlDataset(IterableDataset):
 
-class Collator(object):
+    def __init__(self, fname, tokenizer_l1=None, tokenizer_l2=None):
+        super().__init__()
 
-    def __init__(self, maxlen):
-        self.maxlen = maxlen
+        self.fname = fname
+        self.tokenizer_l1 = tokenizer_l1
+        self.tokenizer_l2 = tokenizer_l2
+        
+        with h5py.File(fname, 'r') as hdf5:
+            self.length = len(hdf5["l1"]["seq"])
+        
+        self.initialized = False
+        
+    def _init_singleton(self):
+        # https://discuss.pytorch.org/t/dataloader-when-num-worker-0-there-is-bug/25643/16
+        if not self.initialized:
+            self.seq_l1 = h5py.File(self.fname, "r")["l1"]["seq"]
+            self.seq_l2 = h5py.File(self.fname, "r")["l2"]["seq"]
+            self.len_l1 = h5py.File(self.fname, "r")["l1"]["len"]
+            self.len_l2 = h5py.File(self.fname, "r")["l2"]["len"]
 
-    def __call__(self, data):
-        sentences_l1, sentences_l2 = zip(*data)
-
-        lengths_l1 = [len(sentence) for sentence in sentences_l1]
-        lengths_l2 = [len(sentence) for sentence in sentences_l2]
-
-        batch_size = len(sentences_l1)
-
-        idx_tensor_l1 = torch.zeros((batch_size, self.maxlen), dtype=torch.long)
-        idx_tensor_l2 = torch.zeros((batch_size, self.maxlen), dtype=torch.long)
-
-        idx_tensor_no_eos_l1 = torch.zeros((batch_size, self.maxlen - 1), dtype=torch.long)
-        idx_tensor_no_eos_l2 = torch.zeros((batch_size, self.maxlen - 1), dtype=torch.long)
-
-        for idx, (sentence_len, sentence_l1) in enumerate(zip(lengths_l1, sentences_l1)):
-            idx_tensor_l1[idx, :] = torch.tensor(sentence_l1 + [1]*(self.maxlen - sentence_len))
-            idx_tensor_no_eos_l1[idx, :] = torch.tensor(sentence_l1[:-1] + [1] * (self.maxlen - sentence_len))
-
-        for idx, (sentence_len, sentence_l2) in enumerate(zip(lengths_l2, sentences_l2)):
-            idx_tensor_l2[idx, :] = torch.tensor(sentence_l2 + [1]*(self.maxlen - sentence_len))
-            idx_tensor_no_eos_l2[idx, :] = torch.tensor(sentence_l2[:-1] + [1] * (self.maxlen - sentence_len))
+            assert len(self.seq_l1) == len(self.len_l1) and \
+                   len(self.seq_l1) == len(self.len_l2) and \
+                   len(self.seq_l1) == len(self.seq_l2)
             
-        return (
-            (idx_tensor_l1, idx_tensor_no_eos_l1, torch.tensor(lengths_l1)),
-            (idx_tensor_l2, idx_tensor_no_eos_l2, torch.tensor(lengths_l2))
+            self.initialized = True
+
+    def __iter__(self):
+        self._init_singleton()
+        
+        return map(self._to_tensor,
+            zip(
+                zip(
+                    self.seq_l1.__iter__(), 
+                    map(lambda x: self._del_eos(*x), zip(self.seq_l1.__iter__(), self.len_l1.__iter__())), 
+                    self.len_l1.__iter__()
+                ),
+                zip(
+                    self.seq_l2.__iter__(), 
+                    map(lambda x: self._del_eos(*x), zip(self.seq_l2.__iter__(), self.len_l2.__iter__())), 
+                    self.len_l2.__iter__()
+                )
+            )
         )
 
-
-class TextDataset(Dataset):
-    
-    def __init__(self, directory, tokenizer_en, tokenizer_fr, training=True, minlen=2, maxlen=50, size=-1):
-
-        # data is stored as a list of tuples of strings (l1-l2)
-        self.tokenizer_en = tokenizer_en
-        self.tokenizer_fr = tokenizer_fr
-
-        mode = "train" if training else "val"
-        self.parallel_data = self.load_data(directory, mode, minlen, maxlen, size)
-
-    def load_data(self, directory, mode, minlen, maxlen, size):
-
-        parallel_data = []
-        removed_count_short = 0
-        removed_count_long = 0
-        read_counter = 0
-
-        if mode not in  ["train", "val"]:
-             raise ValueError("mode needs to be either \'train\' or \'val\'.")
-
-        directory = os.path.join(os.getcwd(), directory)
-        pkl_file = list(filter(lambda fd: fd.endswith(mode + ".pkl"), os.listdir(directory)))
-        if pkl_file:
-            # Loading in from stored out pkl files
-            load_in_file = os.path.join(directory, pkl_file[0])
-            return pickle.load(open(load_in_file, "rb"))
-
-        files = filter(lambda fd: fd.endswith(mode), os.listdir(directory))
-        files = {f.split('.')[-2]:os.path.join(directory, f) for f in files}
-
-        with open(files["en"], "rt") as en, open(files["fr"], "rt") as fr:
-            while True:
-                
-                if (read_counter % 10000 == 0):
-                    print("{} examples processed.".format(read_counter))
-                    
-                read_counter += 1
-                line_en = en.readline()
-                line_fr = fr.readline()
-
-                if line_en == "" or line_fr == "":
-                    break
-
-                line_en = line_en.strip().lower()
-                line_fr = line_fr.strip().lower()
-
-                # splitting and doing this check first speeds up computation
-                too_short = len(line_en.split()) < minlen or len(line_fr.split()) < minlen
-                too_long = len(line_en.split()) > maxlen or len(line_fr.split()) > maxlen
-
-                if too_long:
-                    removed_count_long += 1
-                    continue
-
-                if too_short:
-                    removed_count_short += 1
-                    continue
-
-                tokenized_en = self.tokenizer_en.encode(line_en)
-                tokenized_fr = self.tokenizer_fr.encode(line_fr)
-
-                too_short = len(tokenized_en) < minlen or len(tokenized_fr) < minlen
-                too_long = len(tokenized_en) > maxlen or len(tokenized_fr) > maxlen
-
-                if too_long:
-                    removed_count_long += 1
-                    continue
-
-                if too_short:
-                    removed_count_short += 1
-                    continue
-
-                parallel_data.append((tokenized_en, tokenized_fr))
-                
-                if len(parallel_data) >= size and size > 0:
-                    break
-
-        print("# examples with length < {} removed: {}".format(minlen, removed_count_short))
-        print("# examples with length > {} removed: {}".format(maxlen, removed_count_long))
-
-        saved_out_file = open(os.path.join(directory, "data.{}.pkl".format(mode)), 'wb')
-        pickle.dump(parallel_data, saved_out_file)
-
-        return parallel_data
-
     def __len__(self):
-        return len(self.parallel_data)
+        return self.length
 
-    def __getitem__(self, idx):
-        return self.parallel_data[idx]
+    def __getitem__(self, *args):
+        self._init_singleton()
+        
+        seq_l1 = self.seq_l1.__getitem__(*args)
+        seq_l2 = self.seq_l2.__getitem__(*args)
+        
+        len_l1 = self.len_l1.__getitem__(*args)
+        len_l2 = self.len_l2.__getitem__(*args)
+        
+        return self._to_tensor([
+            [seq_l1, self._del_eos(seq_l1, len_l1), len_l1],
+            [seq_l2, self._del_eos(seq_l2, len_l2), len_l2]
+        ])
+
+    @classmethod
+    def to_hdf5(cls, dirname, fname_l1, fname_l2, tokenizer_l1, tokenizer_l2, min_length, max_length, overwrite=False):
+        
+        basename = "{}-{}.min{}_max{}.hdf5".format(
+            fname_l1.split(".")[-1],
+            fname_l2.split(".")[-1],
+            str(min_length).zfill(3),
+            str(max_length).zfill(3)
+        )
+        fname = os.path.join(dirname, basename)
+
+        if os.path.isfile(fname) and not overwrite:
+            return cls(fname, tokenizer_l1=tokenizer_l1, tokenizer_l2=tokenizer_l2)
+        elif os.path.isfile(fname):
+            os.system(f"rm {fname}")
+                
+        with tempfile.TemporaryFile("w+t") as tmp_l1, tempfile.TemporaryFile("w+t") as tmp_l2:
+            csv_writer_l1 = csv.writer(tmp_l1, delimiter=' ')
+            csv_writer_l2 = csv.writer(tmp_l2, delimiter=' ')
+
+            len_l1 = []
+            len_l2 = []
+            for seq_len_l1, seq_len_l2 in cls._stream(fname_l1, fname_l2, 
+                                                      tokenizer_l1, tokenizer_l2, min_length, max_length):
+                csv_writer_l1.writerow(seq_len_l1[0])
+                csv_writer_l2.writerow(seq_len_l2[0])
+                len_l1.append(seq_len_l1[1])
+                len_l2.append(seq_len_l2[1])
+                if len(len_l1) % 100000 == 0:
+                    print(f"# encoded pairs: {len(len_l1)}")
+            
+            tmp_l1.seek(0)
+            tmp_l2.seek(0)
+
+            seq_l1 = pandas.read_csv(tmp_l1, sep=" ", header=None).values
+            seq_l2 = pandas.read_csv(tmp_l2, sep=" ", header=None).values
+
+        hdf5 = h5py.File(fname, mode="w")
+        hdf5.create_dataset("l1/len", data=len_l1)
+        hdf5.create_dataset("l2/len", data=len_l2)
+        hdf5.create_dataset("l1/seq", data=seq_l1)
+        hdf5.create_dataset("l2/seq", data=seq_l2)
+        hdf5.close()
+        
+        return cls(fname, tokenizer_l1=tokenizer_l1, tokenizer_l2=tokenizer_l2)
+
+    @classmethod
+    def _stream(cls, fname_l1, fname_l2, tokenizer_l1, tokenizer_l2, min_length, max_length):
+        reader_l1 = open(fname_l1)
+        reader_l2 = open(fname_l2)
+        mapper_l1 = map(partial(cls._tokenize, tokenizer_l1, max_length), reader_l1)
+        mapper_l2 = map(partial(cls._tokenize, tokenizer_l2, max_length), reader_l2)
+        zipper = zip(mapper_l1, mapper_l2)
+        length = lambda x: len(x[0][0]) >= min_length and len(x[1][0]) >= min_length and \
+                           len(x[0][0]) == max_length and len(x[1][0]) == max_length
+        stream = filter(length, zipper)
+        return stream
+
+    @staticmethod
+    def _tokenize(tokenizer, max_length, line):
+        encoding = tokenizer.encode(line.lower().strip())
+        return encoding + [tokenizer.pad_token_id] * (max_length - len(encoding)), len(encoding)
+    
+    @staticmethod
+    def _del_eos(sequence, length):
+        return np.delete(sequence, length - 1)
+
+    @staticmethod
+    def _to_tensor(item):
+        return list(map(lambda i: list(map(torch.tensor, i)), item))

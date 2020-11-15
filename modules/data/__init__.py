@@ -1,1 +1,1 @@
-from modules.data.dataset import TextDataset, Collator
+from modules.data.dataset import EuroparlDataset
