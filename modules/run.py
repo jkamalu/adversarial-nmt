@@ -2,7 +2,7 @@ from collections import defaultdict
 
 import torch
 from torch.nn import ModuleDict
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, RandomSampler
 from torch.utils.tensorboard import SummaryWriter
 
 from modules.model import Encoder, Discriminator, BidirectionalTranslator
@@ -42,10 +42,14 @@ def train(model, gen_optimizer, dis_optimizer, dataset_train, dataset_valid, bat
     dataloader_train = DataLoader(
         dataset_train, 
         batch_size=config["batch_size"], 
-        shuffle=True,
         pin_memory=True,
-        num_workers=2,
-        drop_last=True
+        num_workers=4,
+        drop_last=True,
+        sampler=RandomSampler(
+            dataset_train,
+            replacement=True,
+            num_samples=config["n_train_steps"] * config["batch_size"]
+        )
     )
 
     dataloader_valid = DataLoader(
@@ -53,8 +57,8 @@ def train(model, gen_optimizer, dis_optimizer, dataset_train, dataset_valid, bat
         batch_size=config["batch_size"], 
         shuffle=True, 
         pin_memory=True,
-        num_workers=2,
-        drop_last=True
+        num_workers=4,
+        drop_last=True,
     )
 
     writer = SummaryWriter(config["runs_dir"])
@@ -149,24 +153,22 @@ def train(model, gen_optimizer, dis_optimizer, dataset_train, dataset_valid, bat
                 write_to_tensorboard("BLEU", metrics_dict_tb("bleu"), training=False, step=batch_i, writer=writer)
                 write_to_tensorboard("EM", metrics_dict_tb("em"), training=False, step=batch_i, writer=writer)
 
-            # Save weights and terminate training
-            if batch_i >= config["n_train_steps"]:
-                save_checkpoint(model, gen_optimizer, dis_optimizer, batch_i, config["experiment"])
-                break
-
             # Save weights and continue training
             if batch_i % config["checkpoint_frequency"] == 0:
                 save_checkpoint(model, gen_optimizer, dis_optimizer, batch_i, config["experiment"])
+
+    # Save weights after training ends
+    save_checkpoint(model, gen_optimizer, dis_optimizer, batch_i, config["experiment"])
 
 
 def evaluate(model, dataset, config):    
     dataloader = DataLoader(
         dataset,
-        batch_size=config["batch_size"], 
-        shuffle=True, 
+        batch_size=config["batch_size"],
+        shuffle=True,
         pin_memory=True,
         num_workers=4,
-        drop_last=True
+        drop_last=True,
     )
 
     valid(model, dataloader, config)
@@ -245,7 +247,7 @@ def valid(model, dataloader, config):
 
     for language in metrics_dict:
         for metric in metrics_dict[language]:
-            metrics_dict[language][metric] = sum(metrics_dict[language][metric]) / n_valid_steps
+            metrics_dict[language][metric] = sum(metrics_dict[language][metric]) / len(metrics_dict[language][metric])
 
     print("Loss: l1-l2 {:.3}\tl2-l1 {:.3}".format(metrics_dict["l1-l2"]["loss"], metrics_dict["l2-l1"]["loss"]))
     print("BLEU: l1-l2 {:.3}\tl2-l1 {:.3}".format(metrics_dict["l1-l2"]["bleu"], metrics_dict["l2-l1"]["bleu"]))

@@ -48,7 +48,7 @@ def load_config(path):
         config["regularization"]["type"] = []
     if "attention" in config["regularization"]["type"]:
         raise NotImplementedError
-    
+
     config["experiment"] = os.path.splitext(os.path.basename(path))[0]
     config["ckpt_dir"], config["runs_dir"] = init_output_dirs(config["experiment"])
         
