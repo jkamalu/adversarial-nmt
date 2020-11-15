@@ -39,123 +39,138 @@ def switch_trainable(model, switch_):
 def train(model, gen_optimizer, dis_optimizer, dataset_train, dataset_valid, batch_i, config):
     model.train()
 
-    dataloader_train = DataLoader(
-        dataset_train, 
-        batch_size=config["batch_size"], 
-        pin_memory=True,
-        num_workers=4,
-        drop_last=True,
-        sampler=RandomSampler(
+    if config["sample_with_replacement"]:
+        dataloader_train = DataLoader(
             dataset_train,
-            replacement=True,
-            num_samples=config["n_train_steps"] * config["batch_size"]
+            batch_size=config["batch_size"],
+            pin_memory=True,
+            num_workers=4,
+            drop_last=True,
+            sampler=RandomSampler(
+                dataset_train,
+                replacement=True,
+                num_samples=config["n_train_steps"] * config["batch_size"]
+            )
         )
-    )
+    else:
+        dataloader_train = DataLoader(
+            dataset_train,
+            batch_size=config["batch_size"],
+            shuffle=True,
+            pin_memory=True,
+            num_workers=4,
+            drop_last=True
+        )
 
     dataloader_valid = DataLoader(
-        dataset_valid, 
-        batch_size=config["batch_size"], 
-        shuffle=True, 
+        dataset_valid,
+        batch_size=config["batch_size"],
+        shuffle=True,
         pin_memory=True,
         num_workers=4,
-        drop_last=True,
+        drop_last=True
     )
 
     writer = SummaryWriter(config["runs_dir"])
 
     batch_0 = batch_i
-    for batch in dataloader_train:
+    while batch_i < config["n_train_steps"]:
+        for batch in dataloader_train:
 
-        switch_ = switch(batch_i, config)
+            switch_ = switch(batch_i, config)
 
-        # Unpack the batch and move to device
-        batch_l1, batch_l2 = batch
-        sents_l1, sents_no_eos_l1, lengths_l1 = map(lambda t: t.cuda(), batch_l1)
-        sents_l2, sents_no_eos_l2, lengths_l2 = map(lambda t: t.cuda(), batch_l2)
+            # Unpack the batch and move to device
+            batch_l1, batch_l2 = batch
+            sents_l1, sents_no_eos_l1, lengths_l1 = map(lambda t: t.cuda(), batch_l1)
+            sents_l2, sents_no_eos_l2, lengths_l2 = map(lambda t: t.cuda(), batch_l2)
 
-        # Clear optimizer
-        if switch_:
-            gen_optimizer.zero_grad()
-        else:
-            dis_optimizer.zero_grad()
+            # Clear optimizer
+            if switch_:
+                gen_optimizer.zero_grad()
+            else:
+                dis_optimizer.zero_grad()
 
-        # Alternate trainable for encoder and discriminator parameters
-        switch_trainable(model, switch_)
+            # Alternate trainable for encoder and discriminator parameters
+            switch_trainable(model, switch_)
 
-        # Unpack the batch, run the encoders, run the decoders
-        sents_l1, sents_l2, enc_out_l1, enc_out_l2, dec_out_l1, dec_out_l2 = model(
-            sents_l1, sents_no_eos_l1, lengths_l1,
-            sents_l2, sents_no_eos_l2, lengths_l2
-        )
+            # Unpack the batch, run the encoders, run the decoders
+            sents_l1, sents_l2, enc_out_l1, enc_out_l2, dec_out_l1, dec_out_l2 = model(
+                sents_l1, sents_no_eos_l1, lengths_l1,
+                sents_l2, sents_no_eos_l2, lengths_l2
+            )
 
-        # Initial default values for regularization 
-        real_pred_l1 = {}
-        real_pred_l2 = {}
-        label = lambda x: 0.9 if x else 0.1
-        real_l1 = torch.tensor([label(switch_)] * config["batch_size"]).unsqueeze(-1).cuda()
-        real_l2 = torch.tensor([label(not switch_)] * config["batch_size"]).unsqueeze(-1).cuda() 
+            # Initial default values for regularization 
+            real_pred_l1 = {}
+            real_pred_l2 = {}
+            label = lambda x: 0.9 if x else 0.1
+            real_l1 = torch.tensor([label(switch_)] * config["batch_size"]).unsqueeze(-1).cuda()
+            real_l2 = torch.tensor([label(not switch_)] * config["batch_size"]).unsqueeze(-1).cuda() 
 
-        # Gather hidden discriminator labels/predictions
-        if "hidden" in config["regularization"]["type"]:
-            # Use the pooled outputs of the encoders for regularization
-            pred_hddn_l1 = model.discriminate("hidden", enc_out_l1)
-            pred_hddn_l2 = model.discriminate("hidden", enc_out_l2)
-            real_pred_l1["hidden"] = real_l1, pred_hddn_l1
-            real_pred_l2["hidden"] = real_l2, pred_hddn_l2
+            # Gather hidden discriminator labels/predictions
+            if "hidden" in config["regularization"]["type"]:
+                # Use the pooled outputs of the encoders for regularization
+                pred_hddn_l1 = model.discriminate("hidden", enc_out_l1)
+                pred_hddn_l2 = model.discriminate("hidden", enc_out_l2)
+                real_pred_l1["hidden"] = real_l1, pred_hddn_l1
+                real_pred_l2["hidden"] = real_l2, pred_hddn_l2
 
-        loss, loss_l2, loss_l1, reg_loss_l1, reg_loss_l2 = loss_fn(
-            sents_l1[:, 1:], sents_l2[:, 1:],
-            dec_out_l1, dec_out_l2,
-            real_pred_l1, real_pred_l2,
-            ignore_index_l1=dataset_train.tokenizer_l1.pad_token_id,
-            ignore_index_l2=dataset_train.tokenizer_l2.pad_token_id
-        )
+            loss, loss_l2, loss_l1, reg_loss_l1, reg_loss_l2 = loss_fn(
+                sents_l1[:, 1:], sents_l2[:, 1:],
+                dec_out_l1, dec_out_l2,
+                real_pred_l1, real_pred_l2,
+                ignore_index_l1=dataset_train.tokenizer_l1.pad_token_id,
+                ignore_index_l2=dataset_train.tokenizer_l2.pad_token_id
+            )
 
-        acc_l1 = accuracy(real_pred_l1)
-        acc_l2 = accuracy(real_pred_l2)
+            acc_l1 = accuracy(real_pred_l1)
+            acc_l2 = accuracy(real_pred_l2)
 
-        # Optimize trainable parameters
-        loss.backward()
-        if switch_:
-            gen_optimizer.step()
-        else:
-            dis_optimizer.step()
+            # Optimize trainable parameters
+            loss.backward()
+            if switch_:
+                gen_optimizer.step()
+            else:
+                dis_optimizer.step()
 
-        batch_i += 1
-        if batch_i > batch_0: 
+            batch_i += 1
+            if batch_i > batch_0:
 
-            # Write training losses/metrics to stdout and tensorboard
-            if batch_i % config["log_frequency"] == 0:
+                # Write training losses/metrics to stdout and tensorboard
+                if batch_i % config["log_frequency"] == 0:
 
-                print("Step {}: loss {:.4}\n\tcce-l1 {:.4}, cce-l2 {:.4}\n\t\tbce-hddn-l1 {:.4}, bce-hddn-l2 {:.4}\n\t\t\tacc-hddn-l1 {:.4}, acc-hddn-l2 {:.4}".format(
-                        str(batch_i).zfill(6), 
-                        loss.item(), 
-                        loss_l1.item(), loss_l2.item(),
-                        reg_loss_l1["hidden"].item(), reg_loss_l2["hidden"].item(),
-                        acc_l1["hidden"].item(), acc_l2["hidden"].item()
+                    print("Step {}: loss {:.4}\n\tcce-l1 {:.4}, cce-l2 {:.4}\n\t\tbce-hddn-l1 {:.4}, bce-hddn-l2 {:.4}\n\t\t\tacc-hddn-l1 {:.4}, acc-hddn-l2 {:.4}".format(
+                            str(batch_i).zfill(6),
+                            loss.item(),
+                            loss_l1.item(), loss_l2.item(),
+                            reg_loss_l1["hidden"].item(), reg_loss_l2["hidden"].item(),
+                            acc_l1["hidden"].item(), acc_l2["hidden"].item()
+                        )
                     )
-                )
-                cce_metrics = {"l1-l2": loss_l2.item(), "l2-l1": loss_l1.item()}
-                write_to_tensorboard("CCE", cce_metrics, training=True, step=batch_i, writer=writer)
-                bce_metrics = {"hidden l1": reg_loss_l1["hidden"].item(), "hidden l2": reg_loss_l2["hidden"].item()}
-                write_to_tensorboard("BCE", bce_metrics, training=True, step=batch_i, writer=writer)                
-                acc_metrics = {"accuracy l1": acc_l1["hidden"].item(), "accuracy l2": acc_l2["hidden"].item()}
-                write_to_tensorboard("ACC", acc_metrics, training=True, step=batch_i, writer=writer)
+                    cce_metrics = {"l1-l2": loss_l2.item(), "l2-l1": loss_l1.item()}
+                    write_to_tensorboard("CCE", cce_metrics, training=True, step=batch_i, writer=writer)
+                    bce_metrics = {"hidden l1": reg_loss_l1["hidden"].item(), "hidden l2": reg_loss_l2["hidden"].item()}
+                    write_to_tensorboard("BCE", bce_metrics, training=True, step=batch_i, writer=writer)
+                    acc_metrics = {"accuracy l1": acc_l1["hidden"].item(), "accuracy l2": acc_l2["hidden"].item()}
+                    write_to_tensorboard("ACC", acc_metrics, training=True, step=batch_i, writer=writer)
 
-            # Write validation losses/metrics to stdout and tensorboard
-            if batch_i % config["val_frequency"] == 0:
-                metrics_dict = valid(model, dataloader_valid, config)
-                metrics_dict_tb = lambda key: {
-                    "l1-l2": metrics_dict["l1-l2"][key],
-                    "l2-l1": metrics_dict["l2-l1"][key]
-                }
-                write_to_tensorboard("CCE", metrics_dict_tb("loss"), training=False, step=batch_i, writer=writer)
-                write_to_tensorboard("BLEU", metrics_dict_tb("bleu"), training=False, step=batch_i, writer=writer)
-                write_to_tensorboard("EM", metrics_dict_tb("em"), training=False, step=batch_i, writer=writer)
+                # Write validation losses/metrics to stdout and tensorboard
+                if batch_i % config["val_frequency"] == 0:
+                    metrics_dict = valid(model, dataloader_valid, config)
+                    metrics_dict_tb = lambda key: {
+                        "l1-l2": metrics_dict["l1-l2"][key],
+                        "l2-l1": metrics_dict["l2-l1"][key]
+                    }
+                    write_to_tensorboard("CCE", metrics_dict_tb("loss"), training=False, step=batch_i, writer=writer)
+                    write_to_tensorboard("BLEU", metrics_dict_tb("bleu"), training=False, step=batch_i, writer=writer)
+                    write_to_tensorboard("EM", metrics_dict_tb("em"), training=False, step=batch_i, writer=writer)
 
-            # Save weights and continue training
-            if batch_i % config["checkpoint_frequency"] == 0:
-                save_checkpoint(model, gen_optimizer, dis_optimizer, batch_i, config["experiment"])
+                # Sampling w/out replacement requires manual termination
+                if batch_i == config["n_train_steps"]:
+                    break
+
+                # Save weights and continue training
+                if batch_i % config["checkpoint_frequency"] == 0:
+                    save_checkpoint(model, gen_optimizer, dis_optimizer, batch_i, config["experiment"])
 
     # Save weights after training ends
     save_checkpoint(model, gen_optimizer, dis_optimizer, batch_i, config["experiment"])
