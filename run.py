@@ -3,7 +3,7 @@ import sys
 import logging
 from argparse import ArgumentParser
 
-from transformers import RobertaTokenizer, CamembertTokenizer
+from transformers import RobertaTokenizer, CamembertTokenizer, BertTokenizer
 
 import torch; torch.autograd.set_detect_anomaly(True)
 import torch.multiprocessing as mp
