@@ -18,25 +18,22 @@ class BidirectionalTranslator(nn.Module):
         
         # Encoders
         enc = config["encoder"]
-        encoder_l1 = Encoder.init_from_config("bert", config["encoder_kwargs"]["bert"], config["l1"])
-        encoder_l2 = Encoder.init_from_config("bert", config["encoder_kwargs"]["bert"], config["l2"])
+        encoder = Encoder.init_from_config("bert", config["encoder_kwargs"]["bert"], config["multi"])
         
         # Embeddings
         if enc == "bert":
-            embeddings_l1 = encoder_l1.model.get_input_embeddings()
-            embeddings_l2 = encoder_l2.model.get_input_embeddings()
+            embeddings = encoder.model.get_input_embeddings()
         else:
             raise NotImplementedError
             
         # Decoders
         dec = config["decoder"]
-        decoder_l1 = Decoder.init_from_config(dec, config["decoder_kwargs"][dec], embeddings_l1)
-        decoder_l2 = Decoder.init_from_config(dec, config["decoder_kwargs"][dec], embeddings_l2)
+        decoder_l1 = Decoder.init_from_config(dec, config["decoder_kwargs"][dec], embeddings)
+        decoder_l2 = Decoder.init_from_config(dec, config["decoder_kwargs"][dec], embeddings)
 
         # Generator
         self.generator = nn.ModuleDict({
-            "encoder_l1": encoder_l1,
-            "encoder_l2": encoder_l2,
+            "encoder": encoder,
             "decoder_l1": decoder_l1,
             "decoder_l2": decoder_l2
         })
@@ -49,11 +46,11 @@ class BidirectionalTranslator(nn.Module):
 
     def forward(self, sents_l1, sents_no_eos_l1, lengths_l1, sents_l2, sents_no_eos_l2, lengths_l2):
         # L1 to L2
-        enc_out_l1 = self.generator.encoder_l1(sents_l1, lengths=lengths_l1)
+        enc_out_l1 = self.generator.encoder(sents_l1, lengths=lengths_l1)
         dec_out_l2 = self.generator.decoder_l2(sents_no_eos_l2, enc_out_l1, lengths_l1)
 
         # L2 to L1
-        enc_out_l2 = self.generator.encoder_l2(sents_l2, lengths=lengths_l2)
+        enc_out_l2 = self.generator.encoder(sents_l2, lengths=lengths_l2)
         dec_out_l1 = self.generator.decoder_l1(sents_no_eos_l1, enc_out_l2, lengths_l2)
         
         return sents_l1, sents_l2, enc_out_l1, enc_out_l2, dec_out_l1, dec_out_l2
